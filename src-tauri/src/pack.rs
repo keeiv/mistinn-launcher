@@ -87,6 +87,18 @@ async fn latest(project: &str, game_version: &str, loader: &str) -> Result<Optio
     Ok(file.map(|f| (version, f)))
 }
 
+/// A file name we will write or delete inside an instance folder: one plain name ending in .jar
+/// or .zip, no folders, no "..". Names come from Modrinth and from our own lock file, and neither
+/// should be able to reach outside the folder.
+pub fn safe_file_name(name: &str) -> bool {
+    let plain = Path::new(name).file_name().map(|n| n == std::ffi::OsStr::new(name)).unwrap_or(false);
+    let lower = name.to_ascii_lowercase();
+    plain
+        && !name.contains(['/', '\\', ':'])
+        && !name.starts_with('.')
+        && (lower.ends_with(".jar") || lower.ends_with(".zip"))
+}
+
 fn resolved(slug: &str, version: &Value, file: &Value) -> Resolved {
     Resolved {
         slug: slug.to_string(),
@@ -109,7 +121,7 @@ pub async fn resolve(game_version: &str, mistinn: bool, settings: &Settings) -> 
         if !seen.insert(project.clone()) {
             continue;
         }
-        match latest(&project, game_version, "fabric").await? {
+        match latest(&project, game_version, "fabric").await?.filter(|(_, f)| f.get("filename").and_then(|n| n.as_str()).is_some_and(safe_file_name)) {
             Some((version, file)) => {
                 let id = version.get("project_id").and_then(|p| p.as_str()).unwrap_or_default().to_string();
                 if !seen_ids.insert(id) {
@@ -128,7 +140,10 @@ pub async fn resolve(game_version: &str, mistinn: bool, settings: &Settings) -> 
         }
     }
     let shader = if settings.shaders {
-        latest(SHADER_PACK, game_version, "iris").await?.map(|(v, f)| resolved(SHADER_PACK, &v, &f))
+        latest(SHADER_PACK, game_version, "iris")
+            .await?
+            .map(|(v, f)| resolved(SHADER_PACK, &v, &f))
+            .filter(|r| safe_file_name(&r.file))
     } else {
         None
     };
@@ -153,7 +168,7 @@ pub async fn install(plan: &Plan, game_dir: &Path, bundled: &[std::path::PathBuf
             now.push(name.to_string_lossy().to_string());
         }
     }
-    for old in previous.iter().filter(|f| !now.contains(f)) {
+    for old in previous.iter().filter(|f| !now.contains(f) && safe_file_name(f)) {
         let _ = std::fs::remove_file(mods_dir.join(old));
     }
     let mut downloads: Vec<Download> = plan
@@ -178,4 +193,18 @@ pub async fn install(plan: &Plan, game_dir: &Path, bundled: &[std::path::PathBuf
         std::fs::write(game_dir.join("config/iris.properties"), text)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_plain_jar_and_zip_names_are_safe() {
+        assert!(safe_file_name("sodium-fabric-0.9.2+mc26.3.jar"));
+        assert!(safe_file_name("ComplementaryReimagined_r5.9.3.zip"));
+        for bad in ["../evil.jar", "..\\evil.jar", "sub/mod.jar", "C:evil.jar", ".hidden.jar", "mod.exe", ""] {
+            assert!(!safe_file_name(bad), "{bad}");
+        }
+    }
 }
