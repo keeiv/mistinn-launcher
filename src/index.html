@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>霧宿啟動器</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene" aria-hidden="true"></div>
+
+  <header class="title">
+    <h1>霧宿：追放</h1>
+    <p>鏽錨站特派追獵者 · 世界邊緣禁區</p>
+  </header>
+
+  <main class="panel">
+    <section class="block">
+      <label class="label" for="version">遊戲版本</label>
+      <select id="version"></select>
+      <p id="version-note" class="note warn" hidden>此版本沒有支援《霧宿：追放》。會以一般模式遊玩，並加入小地圖、世界地圖等模組。</p>
+    </section>
+
+    <section class="block">
+      <span class="label">遊玩模式</span>
+      <div id="presets" class="presets" role="radiogroup" aria-label="遊玩模式"></div>
+    </section>
+
+    <section class="block">
+      <span class="label">帳號</span>
+      <div id="accounts" class="accounts"></div>
+      <div class="row">
+        <button id="ms-login" class="btn small">微軟帳號登入</button>
+        <span id="ms-note" class="note" hidden>微軟登入尚未開放：啟動器的應用程式正在等待微軟核准。</span>
+      </div>
+      <form id="offline-form" class="row" hidden>
+        <input id="offline-name" maxlength="16" placeholder="測試名稱">
+        <button class="btn small" type="submit">加入離線測試帳號</button>
+      </form>
+      <div id="ms-code" class="code" hidden>
+        <p>在瀏覽器開啟 <b id="ms-url"></b>，輸入代碼：</p>
+        <p class="big-code" id="ms-user-code"></p>
+        <p class="note">登入完成後會自動回到這裡。</p>
+      </div>
+    </section>
+
+    <section class="block go">
+      <button id="play" class="btn play">出發</button>
+      <div id="progress" class="progress" hidden>
+        <div class="bar"><div id="bar-fill" class="fill"></div></div>
+        <p id="progress-text" class="note"></p>
+      </div>
+      <p id="error" class="note error" hidden></p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span id="hardware"></span>
+    <span class="links">
+      <button id="open-folder" class="link">開啟遊戲資料夾</button>
+      <button id="toggle-log" class="link">遊戲紀錄</button>
+      <span id="launcher-version"></span>
+    </span>
+  </footer>
+
+  <pre id="log" class="log" hidden></pre>
+
+  <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "mistinn-launcher",
+  "private": true,
+  "version": "0.1.0",
+  "description": "霧宿啟動器：為《霧宿：追放》準備好一切的 Minecraft 啟動器",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.6"
+  }
+}

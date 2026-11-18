@@ -1,0 +1,197 @@
+/* 霧宿啟動器: pixel UI over the fog-shore scene. Colours come from the mod's palette:
+   night sky, rust, salt and the gold of the bells. */
+@font-face {
+  font-family: "Fusion Pixel";
+  src: url("assets/fonts/fusion-pixel-12px-proportional-zh_hant.ttf") format("truetype");
+}
+
+:root {
+  --ink: #e9e6ea;
+  --ink-dim: #a9a3ae;
+  --night: #15161f;
+  --night-2: #222330;
+  --line: #4a3f44;
+  --rust: #94461f;
+  --rust-light: #c8743a;
+  --gold: #e8b33a;
+  --gold-light: #f0dc8c;
+  --salt: #e9e6ea;
+  --warn: #e8a25a;
+  --bad: #e5484d;
+  --px: 2px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--night);
+  color: var(--ink);
+  font-family: "Fusion Pixel", monospace;
+  font-size: 16px;
+  -webkit-font-smoothing: none;
+  user-select: none;
+}
+
+.scene {
+  position: fixed;
+  inset: 0;
+  background: url("assets/scene.png") center / cover no-repeat;
+  image-rendering: pixelated;
+}
+
+/* a pixel frame: square corners cut by one pixel step */
+.panel, .code, select, input, .preset, .log {
+  border: var(--px) solid var(--line);
+  box-shadow: 0 0 0 var(--px) var(--night), inset var(--px) var(--px) 0 rgba(255, 255, 255, 0.06);
+}
+
+.title {
+  position: fixed;
+  left: 40px;
+  top: 32px;
+  text-shadow: 3px 3px 0 var(--night);
+}
+.title h1 {
+  margin: 0;
+  font-size: 48px;
+  font-weight: normal;
+  letter-spacing: 4px;
+  color: var(--salt);
+}
+.title p {
+  margin: 6px 0 0;
+  color: var(--gold-light);
+  font-size: 16px;
+}
+
+.panel {
+  position: fixed;
+  right: 28px;
+  top: 24px;
+  bottom: 52px;
+  width: 400px;
+  padding: 16px 18px;
+  background: rgba(21, 22, 31, 0.9);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.block { display: flex; flex-direction: column; gap: 8px; }
+.label { color: var(--gold-light); font-size: 14px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+select, input {
+  font: inherit;
+  color: var(--ink);
+  background: var(--night-2);
+  padding: 6px 8px;
+  outline: none;
+}
+select:focus-visible, input:focus-visible, .btn:focus-visible, .preset:focus-visible {
+  outline: var(--px) solid var(--gold);
+  outline-offset: 2px;
+}
+
+.note { margin: 0; font-size: 13px; color: var(--ink-dim); line-height: 1.5; }
+.note.warn { color: var(--warn); }
+.note.error { color: var(--bad); }
+
+.presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.preset {
+  font: inherit;
+  color: var(--ink);
+  background: var(--night-2);
+  padding: 8px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.preset .name { font-size: 18px; }
+.preset .detail { font-size: 12px; color: var(--ink-dim); line-height: 1.45; }
+.preset .tag { font-size: 12px; color: var(--gold); min-height: 14px; }
+.preset[aria-checked="true"] {
+  border-color: var(--gold);
+  background: #2c2620;
+  box-shadow: 0 0 0 var(--px) var(--night), inset 0 0 0 var(--px) rgba(232, 179, 58, 0.35);
+}
+
+.accounts { display: flex; flex-direction: column; gap: 4px; }
+.account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--night-2);
+  cursor: pointer;
+}
+.account[aria-checked="true"] { outline: var(--px) solid var(--gold); }
+.account .kind { font-size: 12px; color: var(--ink-dim); margin-left: auto; }
+.account .remove { font: inherit; background: none; border: 0; color: var(--ink-dim); cursor: pointer; }
+.account .remove:hover { color: var(--bad); }
+
+.btn {
+  font: inherit;
+  color: var(--night);
+  background: var(--gold);
+  border: 0;
+  padding: 8px 14px;
+  cursor: pointer;
+  box-shadow: inset calc(-1 * var(--px)) calc(-1 * var(--px)) 0 #7a6326, inset var(--px) var(--px) 0 var(--gold-light);
+}
+.btn:hover { background: var(--gold-light); }
+.btn:active { box-shadow: inset var(--px) var(--px) 0 #7a6326; }
+.btn:disabled { background: #4a4550; color: var(--ink-dim); cursor: default; box-shadow: none; }
+.btn.small { font-size: 14px; padding: 6px 10px; }
+.btn.play { font-size: 26px; padding: 12px; letter-spacing: 8px; }
+
+.go { margin-top: auto; }
+
+.progress .bar { height: 12px; background: var(--night-2); border: var(--px) solid var(--line); }
+.progress .fill { height: 100%; width: 0; background: repeating-linear-gradient(90deg, var(--rust-light) 0 6px, var(--rust) 6px 8px); }
+
+.code { padding: 10px; background: var(--night-2); }
+.code p { margin: 0 0 6px; font-size: 14px; }
+.big-code { font-size: 28px; letter-spacing: 6px; color: var(--gold-light); }
+
+.footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 36px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(21, 22, 31, 0.92);
+  border-top: var(--px) solid var(--line);
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+.footer .links { display: flex; gap: 16px; align-items: center; }
+.link { font: inherit; background: none; border: 0; color: var(--ink-dim); cursor: pointer; padding: 0; }
+.link:hover { color: var(--gold-light); }
+
+.log {
+  position: fixed;
+  left: 28px;
+  bottom: 52px;
+  width: calc(100% - 480px);
+  height: 46%;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  background: rgba(12, 12, 18, 0.94);
+  font: 12px/1.4 Consolas, monospace;
+  color: #c7c4cc;
+  user-select: text;
+  white-space: pre-wrap;
+}
