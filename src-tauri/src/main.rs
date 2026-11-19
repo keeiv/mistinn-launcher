@@ -4,6 +4,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod auth;
+mod bundled;
 mod fabric;
 mod hardware;
 mod java;
@@ -117,12 +118,9 @@ async fn microsoft_finish(app: tauri::AppHandle, code: auth::DeviceCode) -> Resu
     Ok(account_views(&accounts))
 }
 
-fn bundled_mods(app: &tauri::AppHandle) -> Vec<PathBuf> {
-    let Ok(dir) = app.path().resource_dir() else { return vec![] };
-    let dir = dir.join("resources").join("mods");
-    std::fs::read_dir(dir)
-        .map(|entries| entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "jar")).collect())
-        .unwrap_or_default()
+fn bundled_mods() -> Result<Vec<PathBuf>, String> {
+    let jar = bundled::extract(&paths::root().join("bundled")).map_err(|e| format!("cannot unpack the 霧宿 mod: {e:#}"))?;
+    Ok(vec![jar])
 }
 
 #[tauri::command]
@@ -145,7 +143,7 @@ async fn play(app: tauri::AppHandle, version: String, preset: Preset, account: u
             }
             let _ = auth::save(&accounts);
         }
-        let request = launch::Request { version, preset, account: chosen, bundled: bundled_mods(&app) };
+        let request = launch::Request { version, preset, account: chosen, bundled: bundled_mods()? };
         let progress_app = app.clone();
         let log_app = app.clone();
         launch::run(
@@ -174,13 +172,17 @@ fn open_instance(version: String) -> Result<(), String> {
     Ok(())
 }
 
-/// `--selftest <version> <smooth|normal|ultra> <offline name> <mistinn jar>`: install and start
+/// `--selftest <version> <smooth|normal|ultra> <offline name> [mistinn jar]`: install and start
 /// without the window, printing progress, for automated checks.
 fn selftest(args: &[String]) -> anyhow::Result<()> {
     let version = args.get(2).cloned().unwrap_or_else(|| launch::MISTINN_VERSION.to_string());
     let preset: Preset = serde_json::from_value(serde_json::json!(args.get(3).cloned().unwrap_or_else(|| "normal".into())))?;
     let account = auth::offline(args.get(4).map(String::as_str).unwrap_or("Hunter"))?;
-    let bundled: Vec<PathBuf> = args.get(5).map(PathBuf::from).into_iter().collect();
+    // without an explicit jar, use the one built into this binary, as the window does
+    let bundled: Vec<PathBuf> = match args.get(5) {
+        Some(jar) => vec![PathBuf::from(jar)],
+        None => vec![bundled::extract(&paths::root().join("bundled"))?],
+    };
     let hw = hardware::detect();
     println!("hardware: {hw:?}");
     println!("settings: {:?}", presets::settings(preset, &hw));
