@@ -98,6 +98,10 @@ pub async fn run(
     let options = game_dir.join("options.txt");
     let first_time = !options.exists();
     presets::write_options(&options, &settings, first_time)?;
+    // an offline account's own skin, as a resource pack in place of the default skins
+    if crate::skin::apply(&game_dir, &request.account)? {
+        log("[launcher] offline skin pack on".to_string());
+    }
 
     let natives = paths::versions().join(id).join("natives");
     unpack_natives(&libs.natives, &natives)?;

@@ -136,6 +136,14 @@ select:focus-visible, input:focus-visible, .btn:focus-visible, .preset:focus-vis
 .account .kind { font-size: 12px; color: var(--ink-dim); margin-left: auto; }
 .account .remove { font: inherit; background: none; border: 0; color: var(--ink-dim); cursor: pointer; }
 .account .remove:hover { color: var(--bad); }
+.account .face { width: 16px; height: 16px; image-rendering: pixelated; flex: none; }
+.account .skin { font: inherit; font-size: 12px; background: none; border: 0; color: var(--ink-dim); cursor: pointer; }
+.account .skin:hover { color: var(--gold); }
+.skin-panel { display: flex; gap: 12px; align-items: flex-start; margin-top: 8px; padding: 8px; background: var(--night-2); }
+.skin-panel[hidden] { display: none; }
+.skin-face { width: 64px; height: 64px; image-rendering: pixelated; flex: none; background: var(--night); }
+.skin-controls { display: flex; flex-direction: column; gap: 6px; }
+.skin-controls label { font-size: 13px; margin-right: 12px; cursor: pointer; }
 
 .btn {
   font: inherit;

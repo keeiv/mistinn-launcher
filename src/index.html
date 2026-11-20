@@ -33,6 +33,22 @@
         <button id="ms-login" class="btn small">微軟帳號登入</button>
         <span id="ms-note" class="note" hidden>微軟登入尚未開放：啟動器的應用程式正在等待微軟核准。</span>
       </div>
+      <div id="skin-panel" class="skin-panel" hidden>
+        <canvas id="skin-face" class="skin-face" width="8" height="8" aria-hidden="true"></canvas>
+        <div class="skin-controls">
+          <p class="note" id="skin-title"></p>
+          <div class="row" role="radiogroup" aria-label="手臂">
+            <label><input type="radio" name="arms" value="wide" checked> 粗手臂</label>
+            <label><input type="radio" name="arms" value="slim"> 細手臂</label>
+          </div>
+          <div class="row">
+            <button id="skin-pick" class="btn small" type="button">選擇皮膚圖片…</button>
+            <button id="skin-clear" class="btn small" type="button">恢復預設</button>
+          </div>
+          <p class="note">64×64 或 64×32 的 PNG。離線遊玩時套用，所有版本都適用。</p>
+        </div>
+        <input id="skin-file" type="file" accept="image/png" hidden>
+      </div>
       <form id="offline-form" class="row" hidden>
         <input id="offline-name" maxlength="16" placeholder="測試名稱">
         <button class="btn small" type="submit">加入離線測試帳號</button>

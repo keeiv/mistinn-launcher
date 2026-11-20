@@ -14,6 +14,7 @@ mod net;
 mod pack;
 mod paths;
 mod presets;
+mod skin;
 
 use auth::Account;
 use presets::Preset;
@@ -32,6 +33,9 @@ struct AppState {
 struct AccountView {
     name: String,
     kind: &'static str,
+    /// An offline account's own skin, as a PNG data URL for the preview; none for the default.
+    skin: Option<String>,
+    slim_arms: bool,
 }
 
 #[derive(Serialize)]
@@ -49,14 +53,47 @@ struct StateView {
 fn account_views(accounts: &[Account]) -> Vec<AccountView> {
     accounts
         .iter()
-        .map(|a| AccountView {
-            name: a.name().to_string(),
-            kind: match a {
-                Account::Microsoft { .. } => "microsoft",
-                Account::Offline { .. } => "offline",
-            },
+        .map(|a| {
+            let skin = match a {
+                Account::Offline { uuid, .. } => skin::load(uuid),
+                Account::Microsoft { .. } => None,
+            };
+            AccountView {
+                name: a.name().to_string(),
+                kind: match a {
+                    Account::Microsoft { .. } => "microsoft",
+                    Account::Offline { .. } => "offline",
+                },
+                slim_arms: skin.as_ref().is_some_and(|s| s.slim_arms),
+                skin: skin.map(|s| {
+                    use base64::Engine;
+                    format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(if s.slim_arms { &s.slim } else { &s.wide }))
+                }),
+            }
         })
         .collect()
+}
+
+/// Sets an offline account's skin: the wide-armed and slim-armed versions (64x64 PNGs, made in
+/// the window from the player's image) and which arms it was drawn for.
+#[tauri::command]
+fn set_skin(app: tauri::State<'_, AppState>, index: usize, wide: Vec<u8>, slim: Vec<u8>, slim_arms: bool) -> Result<Vec<AccountView>, String> {
+    let accounts = app.accounts.lock().unwrap();
+    match accounts.get(index) {
+        Some(Account::Offline { uuid, .. }) => skin::save(uuid, &skin::Skin { wide, slim, slim_arms }).map_err(|e| format!("{e:#}"))?,
+        _ => return Err("only an offline account takes a skin from here".into()),
+    }
+    Ok(account_views(&accounts))
+}
+
+/// Goes back to the default skin.
+#[tauri::command]
+fn clear_skin(app: tauri::State<'_, AppState>, index: usize) -> Result<Vec<AccountView>, String> {
+    let accounts = app.accounts.lock().unwrap();
+    if let Some(Account::Offline { uuid, .. }) = accounts.get(index) {
+        skin::remove(uuid).map_err(|e| format!("{e:#}"))?;
+    }
+    Ok(account_views(&accounts))
 }
 
 #[tauri::command]
@@ -96,7 +133,9 @@ fn add_offline(app: tauri::State<'_, AppState>, name: String) -> Result<Vec<Acco
 fn remove_account(app: tauri::State<'_, AppState>, index: usize) -> Result<Vec<AccountView>, String> {
     let mut accounts = app.accounts.lock().unwrap();
     if index < accounts.len() {
-        accounts.remove(index);
+        if let Account::Offline { uuid, .. } = accounts.remove(index) {
+            let _ = skin::remove(&uuid);
+        }
         auth::save(&accounts).map_err(|e| format!("{e:#}"))?;
     }
     Ok(account_views(&accounts))
@@ -172,17 +211,22 @@ fn open_instance(version: String) -> Result<(), String> {
     Ok(())
 }
 
-/// `--selftest <version> <smooth|normal|ultra> <offline name> [mistinn jar]`: install and start
-/// without the window, printing progress, for automated checks.
+/// `--selftest <version> <smooth|normal|ultra> <offline name> [mistinn jar|-] [skin png]`: install
+/// and start without the window, printing progress, for automated checks. A skin given here is
+/// used as both its wide and slim version.
 fn selftest(args: &[String]) -> anyhow::Result<()> {
     let version = args.get(2).cloned().unwrap_or_else(|| launch::MISTINN_VERSION.to_string());
     let preset: Preset = serde_json::from_value(serde_json::json!(args.get(3).cloned().unwrap_or_else(|| "normal".into())))?;
     let account = auth::offline(args.get(4).map(String::as_str).unwrap_or("Hunter"))?;
-    // without an explicit jar, use the one built into this binary, as the window does
-    let bundled: Vec<PathBuf> = match args.get(5) {
+    // without an explicit jar (or with "-"), use the one built into this binary, as the window does
+    let bundled: Vec<PathBuf> = match args.get(5).filter(|a| a.as_str() != "-") {
         Some(jar) => vec![PathBuf::from(jar)],
         None => vec![bundled::extract(&paths::root().join("bundled"))?],
     };
+    if let (Some(png), Account::Offline { uuid, .. }) = (args.get(6), &account) {
+        let bytes = std::fs::read(png)?;
+        skin::save(uuid, &skin::Skin { wide: bytes.clone(), slim: bytes, slim_arms: false })?;
+    }
     let hw = hardware::detect();
     println!("hardware: {hw:?}");
     println!("settings: {:?}", presets::settings(preset, &hw));
@@ -210,7 +254,7 @@ fn main() {
     }
     tauri::Builder::default()
         .manage(AppState { hardware: hardware::detect(), accounts: Mutex::new(auth::load()), launching: Mutex::new(false) })
-        .invoke_handler(tauri::generate_handler![state, versions, add_offline, remove_account, microsoft_start, microsoft_finish, play, open_instance])
+        .invoke_handler(tauri::generate_handler![state, versions, add_offline, remove_account, set_skin, clear_skin, microsoft_start, microsoft_finish, play, open_instance])
         .run(tauri::generate_context!())
         .expect("error while running the launcher");
 }
