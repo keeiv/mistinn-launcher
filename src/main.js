@@ -127,11 +127,15 @@ function openSkin(index) {
 
 function loadImage(file) {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
+    const fail = () => reject(new Error("無法讀取這張圖片。"));
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("無法讀取這張圖片。"));
-    img.src = url;
+    img.onerror = fail;
+    // The launcher window's image policy allows data: URLs.
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = fail;
+    reader.readAsDataURL(file);
   });
 }
 
