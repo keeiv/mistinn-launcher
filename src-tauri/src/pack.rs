@@ -4,6 +4,13 @@
 //! Sodium, Lithium, FerriteCore, ImmediatelyFast, EntityCulling, Dynamic FPS and More Culling,
 //! plus AppleSkin and Mod Menu. 霧宿：追放 brings its own minimap and grid inventory, so with it
 //! no minimap or inventory mods are added; other versions get Xaero's maps, Jade and Mouse Tweaks.
+//!
+//! The newest build of each is taken unless the set would not load: a mod can refuse another's
+//! build (Sodium 0.9.3 refused every Iris out for 26.3 the day it came out). The jars say so in
+//! their `fabric.mod.json`; [`settle`] reads them and steps the mod in conflict back a build.
+
+#[path = "compat.rs"]
+mod compat;
 
 use crate::net::{self, Download};
 use crate::presets::Settings;
@@ -51,6 +58,15 @@ pub struct Plan {
     pub shader: Option<Resolved>,
     /// Mods in the list that have no build for this version.
     pub missing: Vec<String>,
+    /// Mods stepped back to an older build so the set loads, and why.
+    pub notes: Vec<String>,
+}
+
+/// One mod and every build of it for the game version, newest release first; `at` is the one taken.
+struct Choice {
+    slug: String,
+    options: Vec<(Value, Value)>,
+    at: usize,
 }
 
 pub fn wanted(mistinn: bool, settings: &Settings) -> Vec<&'static str> {
@@ -62,6 +78,30 @@ pub fn wanted(mistinn: bool, settings: &Settings) -> Vec<&'static str> {
         list.push(SHADER_MOD);
     }
     list
+}
+
+/// Every build of a project for the game version with its main file: releases newest first, then
+/// betas, then alphas.
+async fn candidates(project: &str, game_version: &str, loader: &str) -> Vec<(Value, Value)> {
+    let url = format!(
+        "{API}/project/{project}/version?loaders=%5B%22{loader}%22%5D&game_versions=%5B%22{game_version}%22%5D"
+    );
+    let Ok(versions) = net::json::<Value>(&url).await else { return vec![] };
+    let list = versions.as_array().cloned().unwrap_or_default();
+    let mut out = vec![];
+    for kind in ["release", "beta", "alpha"] {
+        for version in list.iter().filter(|v| v.get("version_type").and_then(|t| t.as_str()) == Some(kind)) {
+            let file = version
+                .get("files")
+                .and_then(|f| f.as_array())
+                .and_then(|files| files.iter().find(|f| f.get("primary").and_then(|p| p.as_bool()).unwrap_or(false)).or_else(|| files.first()))
+                .cloned();
+            if let Some(file) = file.filter(|f| f.get("filename").and_then(|n| n.as_str()).is_some_and(safe_file_name)) {
+                out.push((version.clone(), file));
+            }
+        }
+    }
+    out
 }
 
 async fn latest(project: &str, game_version: &str, loader: &str) -> Result<Option<(Value, Value)>> {
@@ -110,35 +150,39 @@ fn resolved(slug: &str, version: &Value, file: &Value) -> Resolved {
     }
 }
 
-/// Finds a build of every wanted mod, and of each mod they require, for the game version.
-pub async fn resolve(game_version: &str, mistinn: bool, settings: &Settings) -> Result<Plan> {
+/// Finds a build of every wanted mod, and of each mod they require, for the game version: the
+/// newest, stepped back where the set would not load together (the bundled jars included). Jars
+/// read for the check are kept in `cache` for [`install`].
+pub async fn resolve(game_version: &str, mistinn: bool, settings: &Settings, cache: &Path, bundled: &[std::path::PathBuf]) -> Result<Plan> {
     let mut queue: Vec<String> = wanted(mistinn, settings).iter().map(|s| s.to_string()).collect();
     let mut seen: HashSet<String> = HashSet::new();
     let mut seen_ids: HashSet<String> = HashSet::new();
-    let mut mods = vec![];
+    let mut choices: Vec<Choice> = vec![];
     let mut missing = vec![];
     while let Some(project) = queue.pop() {
         if !seen.insert(project.clone()) {
             continue;
         }
-        match latest(&project, game_version, "fabric").await?.filter(|(_, f)| f.get("filename").and_then(|n| n.as_str()).is_some_and(safe_file_name)) {
-            Some((version, file)) => {
-                let id = version.get("project_id").and_then(|p| p.as_str()).unwrap_or_default().to_string();
-                if !seen_ids.insert(id) {
-                    continue;
-                }
-                for dep in version.get("dependencies").and_then(|d| d.as_array()).into_iter().flatten() {
-                    if dep.get("dependency_type").and_then(|t| t.as_str()) == Some("required") {
-                        if let Some(pid) = dep.get("project_id").and_then(|p| p.as_str()) {
-                            queue.push(pid.to_string());
-                        }
-                    }
-                }
-                mods.push(resolved(&project, &version, &file));
-            }
-            None => missing.push(project),
+        let options = candidates(&project, game_version, "fabric").await;
+        let Some((version, _)) = options.first() else {
+            missing.push(project);
+            continue;
+        };
+        let id = version.get("project_id").and_then(|p| p.as_str()).unwrap_or_default().to_string();
+        if !seen_ids.insert(id) {
+            continue;
         }
+        for dep in version.get("dependencies").and_then(|d| d.as_array()).into_iter().flatten() {
+            if dep.get("dependency_type").and_then(|t| t.as_str()) == Some("required") {
+                if let Some(pid) = dep.get("project_id").and_then(|p| p.as_str()) {
+                    queue.push(pid.to_string());
+                }
+            }
+        }
+        choices.push(Choice { slug: project, options, at: 0 });
     }
+    let notes = settle(&mut choices, cache, bundled).await;
+    let mut mods: Vec<Resolved> = choices.iter().map(|c| resolved(&c.slug, &c.options[c.at].0, &c.options[c.at].1)).collect();
     let shader = if settings.shaders {
         latest(SHADER_PACK, game_version, "iris")
             .await?
@@ -148,16 +192,92 @@ pub async fn resolve(game_version: &str, mistinn: bool, settings: &Settings) -> 
         None
     };
     mods.sort_by(|a, b| a.file.cmp(&b.file));
-    Ok(Plan { mods, shader, missing })
+    Ok(Plan { mods, shader, missing, notes })
+}
+
+/// Where a mod's jar is kept between the check and the install.
+fn cached(cache: &Path, file: &Value) -> Option<std::path::PathBuf> {
+    let name = file.get("filename")?.as_str()?;
+    safe_file_name(name).then(|| cache.join(name))
+}
+
+/// The jar of one build, from the cache or downloaded into it.
+async fn jar(cache: &Path, file: &Value) -> Option<Vec<u8>> {
+    let path = cached(cache, file)?;
+    let sha1 = file.pointer("/hashes/sha1").and_then(|n| n.as_str()).map(String::from);
+    let item = Download { url: file.get("url")?.as_str()?.to_string(), path: path.clone(), sha1 };
+    net::fetch_all(vec![item], |_, _| {}).await.ok()?;
+    std::fs::read(&path).ok()
+}
+
+/// Steps mods back a build at a time until no mod in the set breaks another's build or needs
+/// another build than the one taken. The mod doing the breaking (or the needing) goes back
+/// first; if it has no older build, the other does. Gives up after a few rounds and leaves a note.
+async fn settle(choices: &mut [Choice], cache: &Path, bundled: &[std::path::PathBuf]) -> Vec<String> {
+    let mut notes = vec![];
+    let fixed: Vec<compat::Manifest> = bundled.iter().filter_map(|p| std::fs::read(p).ok()).filter_map(|b| compat::manifest(&b)).collect();
+    for _ in 0..12 {
+        let mut set: Vec<compat::Manifest> = vec![];
+        let mut owner: Vec<Option<usize>> = vec![];
+        for (i, choice) in choices.iter().enumerate() {
+            if let Some(manifest) = jar(cache, &choice.options[choice.at].1).await.and_then(|b| compat::manifest(&b)) {
+                set.push(manifest);
+                owner.push(Some(i));
+            }
+        }
+        for manifest in &fixed {
+            set.push(manifest.clone());
+            owner.push(None);
+        }
+        let found = compat::conflicts(&set);
+        if found.is_empty() {
+            return notes;
+        }
+        let mut stepped = false;
+        for conflict in &found {
+            let (first, second) = match *conflict {
+                compat::Conflict::Breaks { r#mod, other } | compat::Conflict::Needs { r#mod, other } => (r#mod, other),
+            };
+            for who in [first, second] {
+                if let Some(i) = owner[who] {
+                    let choice = &mut choices[i];
+                    if choice.at + 1 < choice.options.len() {
+                        let from = set[who].version.clone();
+                        choice.at += 1;
+                        let to = choice.options[choice.at].0.get("version_number").and_then(|n| n.as_str()).unwrap_or_default().to_string();
+                        notes.push(format!("{} {from} does not load with {} {}: using {to}", set[who].id, set[if who == first { second } else { first }].id, set[if who == first { second } else { first }].version));
+                        stepped = true;
+                        break;
+                    }
+                }
+            }
+            if stepped {
+                break;
+            }
+        }
+        if !stepped {
+            notes.push(format!("could not settle a conflict: {found:?}"));
+            return notes;
+        }
+    }
+    notes
 }
 
 const LOCK: &str = "mistinn-managed.json";
 
 /// Puts the plan's mods into the instance: downloads what is new, removes mods this launcher put
 /// there earlier that are no longer wanted, and leaves the player's own mods alone.
-pub async fn install(plan: &Plan, game_dir: &Path, bundled: &[std::path::PathBuf], progress: impl Fn(usize, usize) + Send + Sync + 'static) -> Result<()> {
+pub async fn install(plan: &Plan, game_dir: &Path, cache: &Path, bundled: &[std::path::PathBuf], progress: impl Fn(usize, usize) + Send + Sync + 'static) -> Result<()> {
     let mods_dir = game_dir.join("mods");
     std::fs::create_dir_all(&mods_dir)?;
+    // the jars the compatibility check already fetched need not be fetched again
+    for m in &plan.mods {
+        let target = mods_dir.join(&m.file);
+        let kept = cache.join(&m.file);
+        if !target.exists() && kept.exists() && safe_file_name(&m.file) {
+            let _ = std::fs::copy(&kept, &target);
+        }
+    }
     let lock = game_dir.join(LOCK);
     let previous: Vec<String> = std::fs::read_to_string(&lock).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
 
@@ -181,6 +301,15 @@ pub async fn install(plan: &Plan, game_dir: &Path, bundled: &[std::path::PathBuf
     }
     net::fetch_all(downloads, progress).await?;
     std::fs::write(&lock, serde_json::to_string_pretty(&now)?)?;
+    // the check's cache keeps only the builds now in use
+    if let Ok(entries) = std::fs::read_dir(cache) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if safe_file_name(&name) && !plan.mods.iter().any(|m| m.file == name) {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
 
     // Iris: shaders on with the downloaded pack, or off
     if plan.mods.iter().any(|m| m.slug == SHADER_MOD) || game_dir.join("config/iris.properties").exists() {
@@ -198,6 +327,40 @@ pub async fn install(plan: &Plan, game_dir: &Path, bundled: &[std::path::PathBuf
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Against Modrinth itself (run with `cargo test -- --ignored`): the 26.3 set with shaders
+    /// must be one Fabric Loader will start, whatever was released today.
+    #[tokio::test]
+    #[ignore]
+    async fn the_live_set_for_26_3_loads_together() {
+        let settings = crate::presets::Settings {
+            preset: crate::presets::Preset::Ultra,
+            memory_mb: 8192,
+            render_distance: 12,
+            simulation_distance: 8,
+            graphics: "fancy",
+            particles: 0,
+            clouds: "fancy",
+            biome_blend: 2,
+            mipmaps: 4,
+            entity_distance: 1.0,
+            max_fps: 120,
+            shaders: true,
+        };
+        let cache = std::env::temp_dir().join("mistinn-compat-check");
+        std::fs::create_dir_all(&cache).unwrap();
+        let plan = resolve("26.3", true, &settings, &cache, &[]).await.unwrap();
+        for note in &plan.notes {
+            println!("note: {note}");
+        }
+        for m in &plan.mods {
+            println!("{} {}", m.slug, m.version);
+        }
+        assert!(!plan.notes.iter().any(|n| n.starts_with("could not settle")), "{:?}", plan.notes);
+        let set: Vec<compat::Manifest> = plan.mods.iter().filter_map(|m| std::fs::read(cache.join(&m.file)).ok()).filter_map(|b| compat::manifest(&b)).collect();
+        assert_eq!(set.len(), plan.mods.len());
+        assert!(compat::conflicts(&set).is_empty());
+    }
 
     #[test]
     fn only_plain_jar_and_zip_names_are_safe() {

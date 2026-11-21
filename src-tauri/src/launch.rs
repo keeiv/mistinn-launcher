@@ -88,11 +88,16 @@ pub async fn run(
     let settings = presets::settings(request.preset, hw);
     if fabric_profile.is_some() {
         stage("mods")(0, 1);
-        let plan = pack::resolve(id, mistinn, &settings).await?;
         let bundled: Vec<PathBuf> = if mistinn { request.bundled.clone() } else { vec![] };
-        pack::install(&plan, &game_dir, &bundled, stage("mods")).await?;
+        let cache = game_dir.join(".mistinn-mods");
+        std::fs::create_dir_all(&cache)?;
+        let plan = pack::resolve(id, mistinn, &settings, &cache, &bundled).await?;
+        pack::install(&plan, &game_dir, &cache, &bundled, stage("mods")).await?;
         if !plan.missing.is_empty() {
             log(format!("[launcher] no build for this version, skipped: {}", plan.missing.join(", ")));
+        }
+        for note in &plan.notes {
+            log(format!("[launcher] {note}"));
         }
     }
     let options = game_dir.join("options.txt");
