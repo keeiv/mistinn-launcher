@@ -85,12 +85,18 @@ pub fn satisfies(version: &str, rule: &Value) -> Option<bool> {
                     None => any_unknown = true,
                 }
             }
-            if any_unknown { None } else { Some(false) }
+            if any_unknown {
+                None
+            } else {
+                Some(false)
+            }
         }
         _ => None,
     }
 }
 
+/// Whether `version` meets every space-separated term (`>=1.0 <2.0`); `None` when a term cannot be
+/// read.
 fn all_terms(version: &str, terms: &str) -> Option<bool> {
     let mut result = true;
     for term in terms.split_whitespace() {
@@ -99,6 +105,7 @@ fn all_terms(version: &str, terms: &str) -> Option<bool> {
     Some(result)
 }
 
+/// Whether `version` meets one term such as `>=0.18`, `~1.2` or `*`; `None` when it cannot be read.
 fn term_holds(version: &str, term: &str) -> Option<bool> {
     if term == "*" {
         return Some(true);
@@ -110,7 +117,11 @@ fn term_holds(version: &str, term: &str) -> Option<bool> {
     let have = Version::parse(version)?;
     if target.split('.').any(|part| part == "x" || part == "X" || part == "*") {
         // a wildcard: 1.9.x is anything from 1.9.0 up to, not including, 1.10.0
-        let fixed: Vec<u64> = target.split('.').take_while(|p| !matches!(*p, "x" | "X" | "*")).map(|p| p.parse().ok()).collect::<Option<_>>()?;
+        let fixed: Vec<u64> = target
+            .split('.')
+            .take_while(|p| !matches!(*p, "x" | "X" | "*"))
+            .map(|p| p.parse().ok())
+            .collect::<Option<_>>()?;
         return Some(have.release.len() >= fixed.len() && have.release[..fixed.len()] == fixed[..]);
     }
     let want = Version::parse(target)?;
@@ -203,8 +214,17 @@ mod tests {
     use serde_json::json;
 
     fn m(id: &str, version: &str, breaks: Value, depends: Value) -> Manifest {
-        let pairs = |v: Value| v.as_object().map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect()).unwrap_or_default();
-        Manifest { id: id.into(), version: version.into(), depends: pairs(depends), breaks: pairs(breaks) }
+        let pairs = |v: Value| {
+            v.as_object()
+                .map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+                .unwrap_or_default()
+        };
+        Manifest {
+            id: id.into(),
+            version: version.into(),
+            depends: pairs(depends),
+            breaks: pairs(breaks),
+        }
     }
 
     #[test]
@@ -229,7 +249,12 @@ mod tests {
     #[test]
     fn a_new_sodium_that_refuses_iris_and_more_culling_is_the_one_in_conflict() {
         let set = [
-            m("sodium", "0.9.3+mc26.3", json!({"iris": "<=1.12.0", "moreculling": "<1.9.2"}), json!({})),
+            m(
+                "sodium",
+                "0.9.3+mc26.3",
+                json!({"iris": "<=1.12.0", "moreculling": "<1.9.2"}),
+                json!({}),
+            ),
             m("iris", "1.11.7+mc26.3", json!({}), json!({"sodium": "0.9.x"})),
             m("moreculling", "1.9.1", json!({}), json!({})),
         ];
@@ -238,7 +263,7 @@ mod tests {
         assert!(found.contains(&Conflict::Breaks { r#mod: 0, other: 2 }));
         // with the Sodium before it, all three load
         let older = [m("sodium", "0.9.2+mc26.3", json!({}), json!({})), set[1].clone(), set[2].clone()];
-        assert!(conflicts(&older).is_empty());
+        assert_eq!(conflicts(&older), vec![]);
     }
 
     #[test]
@@ -252,7 +277,12 @@ mod tests {
 
     #[test]
     fn mods_outside_the_set_are_left_alone() {
-        let set = [m("lithium", "0.20.0", json!({"canary": "*"}), json!({"minecraft": "26.3", "fabricloader": ">=0.18"}))];
-        assert!(conflicts(&set).is_empty());
+        let set = [m(
+            "lithium",
+            "0.20.0",
+            json!({"canary": "*"}),
+            json!({"minecraft": "26.3", "fabricloader": ">=0.18"}),
+        )];
+        assert_eq!(conflicts(&set), vec![]);
     }
 }

@@ -7,10 +7,18 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 
-pub const USER_AGENT: &str = concat!("MistinnLauncher/", env!("CARGO_PKG_VERSION"), " (+https://moriteahouse.shizune.life)");
+/// How the launcher names itself to the services it calls.
+pub const USER_AGENT: &str = concat!(
+    "MistinnLauncher/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://moriteahouse.shizune.life)"
+);
+/// How many files are downloaded at once.
 const PARALLEL: usize = 16;
+/// How many times a download is tried before giving up.
 const RETRIES: usize = 3;
 
+/// The one HTTP client every request goes through.
 pub fn client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
@@ -23,12 +31,13 @@ pub fn client() -> &'static reqwest::Client {
     })
 }
 
+/// Fetches and parses a JSON document.
 pub async fn json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T> {
     let response = client().get(url).send().await.with_context(|| format!("GET {url}"))?;
     if !response.status().is_success() {
         bail!("GET {url}: HTTP {}", response.status());
     }
-    Ok(response.json::<T>().await.with_context(|| format!("JSON from {url}"))?)
+    response.json::<T>().await.with_context(|| format!("JSON from {url}"))
 }
 
 /// One file to fetch. `sha1` is checked when given; an existing file that matches is kept.
@@ -39,19 +48,22 @@ pub struct Download {
     pub sha1: Option<String>,
 }
 
+/// The SHA-1 of a file, in hex; `None` when it cannot be read.
 pub fn sha1_of(path: &Path) -> Option<String> {
     let bytes = std::fs::read(path).ok()?;
     Some(hex::encode(Sha1::digest(&bytes)))
 }
 
+/// Whether the file is already there (and matches its SHA-1, when one is known).
 fn is_current(item: &Download) -> bool {
     match (&item.sha1, item.path.exists()) {
         (_, false) => false,
-        (Some(expected), true) => sha1_of(&item.path).map(|h| h.eq_ignore_ascii_case(expected)).unwrap_or(false),
+        (Some(expected), true) => sha1_of(&item.path).is_some_and(|h| h.eq_ignore_ascii_case(expected)),
         (None, true) => true,
     }
 }
 
+/// Downloads one file unless it is already current, retrying a few times.
 async fn fetch_one(item: &Download) -> Result<()> {
     if is_current(item) {
         return Ok(());
@@ -69,6 +81,7 @@ async fn fetch_one(item: &Download) -> Result<()> {
     Err(last.unwrap())
 }
 
+/// One try at a download: checked against its SHA-1 and written in place only when whole.
 async fn fetch_attempt(item: &Download) -> Result<()> {
     let response = client().get(&item.url).send().await.with_context(|| format!("GET {}", item.url))?;
     if !response.status().is_success() {
@@ -113,7 +126,11 @@ pub async fn fetch_all(items: Vec<Download>, progress: impl Fn(usize, usize) + S
         .buffer_unordered(PARALLEL)
         .collect()
         .await;
-    let failures: Vec<String> = results.into_iter().filter_map(|r| r.err()).map(|e| format!("{e:#}")).collect();
+    let failures: Vec<String> = results
+        .into_iter()
+        .filter_map(std::result::Result::err)
+        .map(|e| format!("{e:#}"))
+        .collect();
     if !failures.is_empty() {
         bail!("{} of {total} downloads failed; first: {}", failures.len(), failures[0]);
     }

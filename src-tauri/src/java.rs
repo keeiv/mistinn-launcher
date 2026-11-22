@@ -7,8 +7,10 @@ use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
 use std::path::PathBuf;
 
+/// Mojang's list of Java runtimes for every platform.
 const RUNTIMES: &str = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
 
+/// This machine's name in Mojang's runtime list.
 fn platform() -> &'static str {
     if cfg!(all(windows, target_arch = "x86_64")) {
         "windows-x64"
@@ -30,6 +32,7 @@ pub fn component_of(version: &Value) -> String {
         .to_string()
 }
 
+/// Where the Java executable of a runtime component lives once installed.
 pub fn java_exe(component: &str) -> PathBuf {
     let dir = paths::runtimes().join(component);
     if cfg!(windows) {
@@ -45,7 +48,10 @@ pub async fn ensure(component: &str, progress: impl Fn(usize, usize) + Send + Sy
     let entry = all
         .pointer(&format!("/{}/{component}/0", platform()))
         .ok_or_else(|| anyhow!("no {component} runtime for {}", platform()))?;
-    let manifest_url = entry.pointer("/manifest/url").and_then(|u| u.as_str()).context("runtime manifest url")?;
+    let manifest_url = entry
+        .pointer("/manifest/url")
+        .and_then(|u| u.as_str())
+        .context("runtime manifest url")?;
     let manifest: Value = net::json(manifest_url).await?;
     let root = paths::runtimes().join(component);
     let mut downloads = vec![];

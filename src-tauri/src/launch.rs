@@ -16,6 +16,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 /// The game version 霧宿：追放 is made for.
 pub const MISTINN_VERSION: &str = "26.3";
 
+/// How far a launch has got, sent to the window as it goes.
 #[derive(Debug, Clone, Serialize)]
 pub struct Progress {
     pub stage: String,
@@ -23,6 +24,8 @@ pub struct Progress {
     pub total: usize,
 }
 
+/// What to start: a game version, a way to play, an account and the mod jars that come with the
+/// launcher.
 pub struct Request {
     pub version: String,
     pub preset: Preset,
@@ -31,6 +34,7 @@ pub struct Request {
     pub bundled: Vec<PathBuf>,
 }
 
+/// The folder a version plays in: the 霧宿 version has its own, every other version one apiece.
 pub fn instance_id(version: &str) -> String {
     if version == MISTINN_VERSION {
         "mistinn".to_string()
@@ -51,7 +55,13 @@ pub async fn run(
     let stage = |name: &str| {
         let report = report.clone();
         let name = name.to_string();
-        move |done: usize, total: usize| report(Progress { stage: name.clone(), done, total })
+        move |done: usize, total: usize| {
+            report(Progress {
+                stage: name.clone(),
+                done,
+                total,
+            });
+        }
     };
 
     stage("version")(0, 1);
@@ -94,7 +104,10 @@ pub async fn run(
         let plan = pack::resolve(id, mistinn, &settings, &cache, &bundled).await?;
         pack::install(&plan, &game_dir, &cache, &bundled, stage("mods")).await?;
         if !plan.missing.is_empty() {
-            log(format!("[launcher] no build for this version, skipped: {}", plan.missing.join(", ")));
+            log(format!(
+                "[launcher] no build for this version, skipped: {}",
+                plan.missing.join(", ")
+            ));
         }
         for note in &plan.notes {
             log(format!("[launcher] {note}"));
@@ -113,24 +126,30 @@ pub async fn run(
 
     // classpath: Fabric's libraries win over vanilla ones of the same artifact
     let mut classpath: Vec<PathBuf> = vec![];
-    let mut taken: HashSet<String> = HashSet::new();
+    let mut placed: HashSet<String> = HashSet::new();
     if let Some(profile) = &fabric_profile {
         for lib in &profile.libraries {
-            taken.insert(artifact_key(&lib.path));
+            placed.insert(artifact_key(&lib.path));
             classpath.push(lib.path.clone());
         }
     }
     for path in &libs.classpath {
-        if taken.insert(artifact_key(path)) {
+        if placed.insert(artifact_key(path)) {
             classpath.push(path.clone());
         }
     }
     classpath.push(client.path.clone());
     let separator = if cfg!(windows) { ";" } else { ":" };
-    let classpath_text = classpath.iter().map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>().join(separator);
+    let classpath_text = classpath
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect::<Vec<_>>()
+        .join(separator);
 
     let (name, uuid, token, user_type) = match &request.account {
-        Account::Microsoft { name, uuid, access_token, .. } => (name.clone(), uuid.clone(), access_token.clone(), "msa"),
+        Account::Microsoft {
+            name, uuid, access_token, ..
+        } => (name.clone(), uuid.clone(), access_token.clone(), "msa"),
         Account::Offline { name, uuid } => (name.clone(), uuid.clone(), "0".to_string(), "legacy"),
     };
     let vars = [
@@ -184,7 +203,7 @@ pub async fn run(
         jvm.push("-cp".into());
         jvm.push(substitute("${classpath}"));
         if let Some(legacy) = version.get("minecraftArguments").and_then(|a| a.as_str()) {
-            game.extend(legacy.split_whitespace().map(|a| substitute(a)));
+            game.extend(legacy.split_whitespace().map(&substitute));
         }
     }
     let mut main_class = version.get("mainClass").and_then(|m| m.as_str()).unwrap_or_default().to_string();
@@ -196,9 +215,27 @@ pub async fn run(
 
     stage("start")(1, 1);
     let mut command = tokio::process::Command::new(&java);
-    command.args(&jvm).arg(&main_class).args(&game).current_dir(&game_dir).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command
+        .args(&jvm)
+        .arg(&main_class)
+        .args(&game)
+        .current_dir(&game_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     let mut child = command.spawn().with_context(|| format!("starting {}", java.display()))?;
-    for stream in [child.stdout.take().map(|s| Box::new(s) as Box<dyn tokio::io::AsyncRead + Unpin + Send>), child.stderr.take().map(|s| Box::new(s) as Box<dyn tokio::io::AsyncRead + Unpin + Send>)].into_iter().flatten() {
+    for stream in [
+        child
+            .stdout
+            .take()
+            .map(|s| Box::new(s) as Box<dyn tokio::io::AsyncRead + Unpin + Send>),
+        child
+            .stderr
+            .take()
+            .map(|s| Box::new(s) as Box<dyn tokio::io::AsyncRead + Unpin + Send>),
+    ]
+    .into_iter()
+    .flatten()
+    {
         let log = log.clone();
         tokio::spawn(async move {
             let mut lines = BufReader::new(stream).lines();
@@ -215,18 +252,19 @@ pub async fn run(
 /// The modern argument list of one kind ("jvm" or "game"), with rule-gated entries resolved.
 fn arguments(version: &Value, kind: &str) -> Vec<String> {
     let mut out = vec![];
-    for arg in version.pointer(&format!("/arguments/{kind}")).and_then(|a| a.as_array()).into_iter().flatten() {
+    for arg in version
+        .pointer(&format!("/arguments/{kind}"))
+        .and_then(|a| a.as_array())
+        .into_iter()
+        .flatten()
+    {
         match arg {
             Value::String(s) => out.push(s.clone()),
-            Value::Object(o) => {
-                if mojang::rules_allow(o.get("rules")) {
-                    match o.get("value") {
-                        Some(Value::String(s)) => out.push(s.clone()),
-                        Some(Value::Array(a)) => out.extend(a.iter().filter_map(|v| v.as_str().map(String::from))),
-                        _ => {}
-                    }
-                }
-            }
+            Value::Object(o) if mojang::rules_allow(o.get("rules")) => match o.get("value") {
+                Some(Value::String(s)) => out.push(s.clone()),
+                Some(Value::Array(a)) => out.extend(a.iter().filter_map(|v| v.as_str().map(String::from))),
+                _ => {}
+            },
             _ => {}
         }
     }
@@ -252,6 +290,7 @@ fn artifact_key(path: &Path) -> String {
     }
 }
 
+/// Unpacks old-style native library jars into the natives folder.
 fn unpack_natives(jars: &[PathBuf], into: &Path) -> Result<()> {
     if jars.is_empty() {
         return Ok(());

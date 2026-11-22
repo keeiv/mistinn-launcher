@@ -1,5 +1,11 @@
 name: CI
 
+# Every push to main and every pull request runs four checks (see CONTRIBUTING.md):
+#   style    – Rust formatting (rustfmt), the window's script, styles and page (Prettier, ESLint)
+#   comments – module, item and function comments (scripts/check_comments.py)
+#   memory   – unsafe code only where allowed and each block justified (Clippy), and no known
+#              memory-safety or other advisories in the dependencies (RustSec)
+#   test     – strict Clippy over everything, then the unit tests
 on:
   push:
     branches: [main]
@@ -9,8 +15,57 @@ permissions:
   contents: read
 
 jobs:
+  style:
+    name: Code style
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - run: npm ci
+      - name: Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      - name: Script, styles and page formatting
+        run: npm run format:check
+      - name: Script lint
+        run: npm run lint
+
+  comments:
+    name: Comment style
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python scripts/check_comments.py
+
+  memory:
+    name: Memory safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2
+        with:
+          tool: cargo-audit
+      - name: Dependency advisories (RustSec)
+        # a vulnerability fails the build; unmaintained-crate notices are printed for the reviewer
+        run: cargo audit --file src-tauri/Cargo.lock
+      - name: Unsafe code is only where allowed, and every block says why it is sound
+        run: |
+          # unsafe_code is denied crate-wide (Cargo.toml); list where it is allowed, so a reviewer sees any new place
+          grep -rn "allow(unsafe_code)" src-tauri/src || true
+          if grep -rnE "unsafe \{|unsafe fn|unsafe impl" src-tauri/src | grep -v "^src-tauri/src/\(auth\|hardware\)\.rs:"; then
+            echo "::error::unsafe code outside auth.rs and hardware.rs: it needs a review and a place in this list"
+            exit 1
+          fi
+
   test:
-    name: Test
+    name: Lint and test
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -20,5 +75,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: ./scripts/fetch-mod.ps1
+      - name: Clippy (strict, with the memory and comment lints in Cargo.toml)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
       - name: Test
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked

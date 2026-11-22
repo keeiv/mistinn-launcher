@@ -1,6 +1,7 @@
 //! 霧宿啟動器 (Mistinn Launcher): starts Minecraft ready for 霧宿：追放, with a performance pack
 //! and settings fitted to the player's computer.
-
+// Tauri hands a command its state and arguments by value: that is how it calls them
+#![allow(clippy::needless_pass_by_value)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod auth;
@@ -23,12 +24,15 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
+/// What the window's commands share: the hardware found at start, the accounts, and whether a
+/// launch is under way.
 struct AppState {
     hardware: hardware::Hardware,
     accounts: Mutex<Vec<Account>>,
     launching: Mutex<bool>,
 }
 
+/// An account as the window shows it, without its tokens.
 #[derive(Serialize)]
 struct AccountView {
     name: String,
@@ -38,6 +42,7 @@ struct AccountView {
     slim_arms: bool,
 }
 
+/// Everything the window needs when it opens.
 #[derive(Serialize)]
 struct StateView {
     hardware: hardware::Hardware,
@@ -49,6 +54,7 @@ struct StateView {
     launcher_version: &'static str,
 }
 
+/// The accounts as the window shows them.
 fn account_views(accounts: &[Account]) -> Vec<AccountView> {
     accounts
         .iter()
@@ -66,7 +72,10 @@ fn account_views(accounts: &[Account]) -> Vec<AccountView> {
                 slim_arms: skin.as_ref().is_some_and(|s| s.slim_arms),
                 skin: skin.map(|s| {
                     use base64::Engine;
-                    format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(if s.slim_arms { &s.slim } else { &s.wide }))
+                    format!(
+                        "data:image/png;base64,{}",
+                        base64::engine::general_purpose::STANDARD.encode(if s.slim_arms { &s.slim } else { &s.wide })
+                    )
                 }),
             }
         })
@@ -76,7 +85,13 @@ fn account_views(accounts: &[Account]) -> Vec<AccountView> {
 /// Sets an offline account's skin: the wide-armed and slim-armed versions (64x64 PNGs, made in
 /// the window from the player's image) and which arms it was drawn for.
 #[tauri::command]
-fn set_skin(app: tauri::State<'_, AppState>, index: usize, wide: Vec<u8>, slim: Vec<u8>, slim_arms: bool) -> Result<Vec<AccountView>, String> {
+fn set_skin(
+    app: tauri::State<'_, AppState>,
+    index: usize,
+    wide: Vec<u8>,
+    slim: Vec<u8>,
+    slim_arms: bool,
+) -> Result<Vec<AccountView>, String> {
     let accounts = app.accounts.lock().unwrap();
     match accounts.get(index) {
         Some(Account::Offline { uuid, .. }) => skin::save(uuid, &skin::Skin { wide, slim, slim_arms }).map_err(|e| format!("{e:#}"))?,
@@ -95,13 +110,18 @@ fn clear_skin(app: tauri::State<'_, AppState>, index: usize) -> Result<Vec<Accou
     Ok(account_views(&accounts))
 }
 
+/// Everything the window needs when it opens: hardware, the three ways to play, accounts and
+/// versions.
 #[tauri::command]
 fn state(app: tauri::State<'_, AppState>) -> StateView {
     let config = auth::config();
     let hw = app.hardware.clone();
     StateView {
         recommended: presets::recommended(&hw),
-        presets: [Preset::Smooth, Preset::Normal, Preset::Ultra].iter().map(|p| presets::settings(*p, &hw)).collect(),
+        presets: [Preset::Smooth, Preset::Normal, Preset::Ultra]
+            .iter()
+            .map(|p| presets::settings(*p, &hw))
+            .collect(),
         hardware: hw,
         accounts: account_views(&app.accounts.lock().unwrap()),
         microsoft_ready: !config.msa_client_id.trim().is_empty(),
@@ -117,6 +137,7 @@ async fn versions() -> Result<Vec<String>, String> {
     Ok(list.into_iter().filter(|v| v.kind == "release").map(|v| v.id).collect())
 }
 
+/// Adds an offline account (or moves it to the top) and saves the list.
 #[tauri::command]
 fn add_offline(app: tauri::State<'_, AppState>, name: String) -> Result<Vec<AccountView>, String> {
     let account = auth::offline(&name).map_err(|e| format!("{e:#}"))?;
@@ -127,6 +148,7 @@ fn add_offline(app: tauri::State<'_, AppState>, name: String) -> Result<Vec<Acco
     Ok(account_views(&accounts))
 }
 
+/// Removes an account, and an offline account's skin with it.
 #[tauri::command]
 fn remove_account(app: tauri::State<'_, AppState>, index: usize) -> Result<Vec<AccountView>, String> {
     let mut accounts = app.accounts.lock().unwrap();
@@ -139,11 +161,13 @@ fn remove_account(app: tauri::State<'_, AppState>, index: usize) -> Result<Vec<A
     Ok(account_views(&accounts))
 }
 
+/// Starts a Microsoft sign-in and returns the code the player enters.
 #[tauri::command]
 async fn microsoft_start() -> Result<auth::DeviceCode, String> {
     auth::start_device_code().await.map_err(|e| format!("{e:#}"))
 }
 
+/// Finishes a Microsoft sign-in, saves the account and returns the list.
 #[tauri::command]
 async fn microsoft_finish(app: tauri::AppHandle, code: auth::DeviceCode) -> Result<Vec<AccountView>, String> {
     let account = auth::finish_device_code(&code).await.map_err(|e| format!("{e:#}"))?;
@@ -155,11 +179,13 @@ async fn microsoft_finish(app: tauri::AppHandle, code: auth::DeviceCode) -> Resu
     Ok(account_views(&accounts))
 }
 
+/// Writes out the mod built into the launcher and returns where it is.
 fn bundled_mods() -> Result<Vec<PathBuf>, String> {
     let jar = bundled::extract(&paths::root().join("bundled")).map_err(|e| format!("cannot unpack the 霧宿 mod: {e:#}"))?;
     Ok(vec![jar])
 }
 
+/// Prepares and starts the game; only one launch at a time.
 #[tauri::command]
 async fn play(app: tauri::AppHandle, version: String, preset: Preset, account: usize) -> Result<(), String> {
     let state = app.state::<AppState>();
@@ -171,7 +197,13 @@ async fn play(app: tauri::AppHandle, version: String, preset: Preset, account: u
         *busy = true;
     }
     let result = async {
-        let mut chosen = state.accounts.lock().unwrap().get(account).cloned().ok_or("choose an account first")?;
+        let mut chosen = state
+            .accounts
+            .lock()
+            .unwrap()
+            .get(account)
+            .cloned()
+            .ok_or("choose an account first")?;
         if matches!(chosen, Account::Microsoft { .. }) {
             chosen = auth::refresh(&chosen).await.map_err(|e| format!("{e:#}"))?;
             let mut accounts = state.accounts.lock().unwrap();
@@ -180,7 +212,12 @@ async fn play(app: tauri::AppHandle, version: String, preset: Preset, account: u
             }
             let _ = auth::save(&accounts);
         }
-        let request = launch::Request { version, preset, account: chosen, bundled: bundled_mods()? };
+        let request = launch::Request {
+            version,
+            preset,
+            account: chosen,
+            bundled: bundled_mods()?,
+        };
         let progress_app = app.clone();
         let log_app = app.clone();
         launch::run(
@@ -201,11 +238,15 @@ async fn play(app: tauri::AppHandle, version: String, preset: Preset, account: u
     result
 }
 
+/// Opens a version's game folder in the file manager.
 #[tauri::command]
 fn open_instance(version: String) -> Result<(), String> {
     let dir = paths::instance(&launch::instance_id(&version));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::process::Command::new(if cfg!(windows) { "explorer" } else { "xdg-open" }).arg(dir).spawn().map_err(|e| e.to_string())?;
+    std::process::Command::new(if cfg!(windows) { "explorer" } else { "xdg-open" })
+        .arg(dir)
+        .spawn()
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -215,7 +256,7 @@ fn open_instance(version: String) -> Result<(), String> {
 fn selftest(args: &[String]) -> anyhow::Result<()> {
     let version = args.get(2).cloned().unwrap_or_else(|| launch::MISTINN_VERSION.to_string());
     let preset: Preset = serde_json::from_value(serde_json::json!(args.get(3).cloned().unwrap_or_else(|| "normal".into())))?;
-    let account = auth::offline(args.get(4).map(String::as_str).unwrap_or("Hunter"))?;
+    let account = auth::offline(args.get(4).map_or("Hunter", String::as_str))?;
     // without an explicit jar (or with "-"), use the one built into this binary, as the window does
     let bundled: Vec<PathBuf> = match args.get(5).filter(|a| a.as_str() != "-") {
         Some(jar) => vec![PathBuf::from(jar)],
@@ -223,14 +264,26 @@ fn selftest(args: &[String]) -> anyhow::Result<()> {
     };
     if let (Some(png), Account::Offline { uuid, .. }) = (args.get(6), &account) {
         let bytes = std::fs::read(png)?;
-        skin::save(uuid, &skin::Skin { wide: bytes.clone(), slim: bytes, slim_arms: false })?;
+        skin::save(
+            uuid,
+            &skin::Skin {
+                wide: bytes.clone(),
+                slim: bytes,
+                slim_arms: false,
+            },
+        )?;
     }
     let hw = hardware::detect();
     println!("hardware: {hw:?}");
     println!("settings: {:?}", presets::settings(preset, &hw));
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(launch::run(
-        launch::Request { version, preset, account, bundled },
+        launch::Request {
+            version,
+            preset,
+            account,
+            bundled,
+        },
         &hw,
         |p| {
             if p.done == p.total || p.done % 500 == 0 {
@@ -241,6 +294,7 @@ fn selftest(args: &[String]) -> anyhow::Result<()> {
     ))
 }
 
+/// Starts the window, or with `--selftest` installs and starts one game without it.
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).map(String::as_str) == Some("--selftest") {
@@ -251,8 +305,23 @@ fn main() {
         return;
     }
     tauri::Builder::default()
-        .manage(AppState { hardware: hardware::detect(), accounts: Mutex::new(auth::load()), launching: Mutex::new(false) })
-        .invoke_handler(tauri::generate_handler![state, versions, add_offline, remove_account, set_skin, clear_skin, microsoft_start, microsoft_finish, play, open_instance])
+        .manage(AppState {
+            hardware: hardware::detect(),
+            accounts: Mutex::new(auth::load()),
+            launching: Mutex::new(false),
+        })
+        .invoke_handler(tauri::generate_handler![
+            state,
+            versions,
+            add_offline,
+            remove_account,
+            set_skin,
+            clear_skin,
+            microsoft_start,
+            microsoft_finish,
+            play,
+            open_instance
+        ])
         .run(tauri::generate_context!())
         .expect("error while running the launcher");
 }
