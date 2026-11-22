@@ -2,9 +2,8 @@
 //! page, the launcher never sees a password), then Xbox Live, XSTS and Minecraft services, as
 //! documented by the community at minecraft.wiki ("Microsoft Authentication Scheme").
 //!
-//! It needs an Azure application ID that Microsoft has approved for the Minecraft API; until one
-//! is set in launcher.json ("msa_client_id"), only the offline test account is available, and only
-//! when launcher.json allows it ("dev_offline": true).
+//! Microsoft sign-in needs an Azure application ID that Microsoft has approved for the Minecraft
+//! API. The launcher reads it from launcher.json ("msa_client_id"). Offline accounts work without it.
 //!
 //! Saved tokens are encrypted with Windows DPAPI, so they only open for the same Windows user.
 
@@ -33,8 +32,6 @@ impl Account {
 pub struct LauncherConfig {
     #[serde(default)]
     pub msa_client_id: String,
-    #[serde(default)]
-    pub dev_offline: bool,
 }
 
 pub fn config() -> LauncherConfig {
@@ -97,14 +94,32 @@ fn unprotect(_: &[u8]) -> Result<Vec<u8>> {
 }
 
 pub fn offline(name: &str) -> Result<Account> {
-    if !config().dev_offline {
-        bail!("offline accounts are for development only (set dev_offline in launcher.json)");
-    }
     let valid = (3..=16).contains(&name.len()) && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
     if !valid {
         bail!("a name is 3-16 letters, digits or underscores");
     }
     Ok(Account::Offline { name: name.to_string(), uuid: uuid::Uuid::new_v4().simple().to_string() })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn creates_offline_account_with_a_valid_name() {
+        let Account::Offline { name, uuid } = offline("New_Hunter25").unwrap() else {
+            panic!("expected an offline account");
+        };
+        assert_eq!(name, "New_Hunter25");
+        assert!(uuid::Uuid::parse_str(&uuid).is_ok());
+    }
+
+    #[test]
+    fn rejects_invalid_offline_names() {
+        for name in ["", "ab", "seventeen_letters", "new hunter", "獵人_25"] {
+            assert_eq!(offline(name).unwrap_err().to_string(), "a name is 3-16 letters, digits or underscores");
+        }
+    }
 }
 
 // ── Microsoft sign-in ────────────────────────────────────────────────

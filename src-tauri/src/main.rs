@@ -45,7 +45,6 @@ struct StateView {
     presets: Vec<presets::Settings>,
     accounts: Vec<AccountView>,
     microsoft_ready: bool,
-    dev_offline: bool,
     mistinn_version: &'static str,
     launcher_version: &'static str,
 }
@@ -106,7 +105,6 @@ fn state(app: tauri::State<'_, AppState>) -> StateView {
         hardware: hw,
         accounts: account_views(&app.accounts.lock().unwrap()),
         microsoft_ready: !config.msa_client_id.trim().is_empty(),
-        dev_offline: config.dev_offline,
         mistinn_version: launch::MISTINN_VERSION,
         launcher_version: env!("CARGO_PKG_VERSION"),
     }

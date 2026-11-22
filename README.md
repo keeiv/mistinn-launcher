@@ -36,6 +36,8 @@
 
 ## 帳號
 
+所有玩家都可以直接加入離線帳號，在本機遊玩並自訂皮膚。角色名稱需使用 3 至 16 個英文字母、數字或底線。
+
 微軟登入使用裝置代碼流程，啟動器不會經手密碼，權杖用 Windows DPAPI 加密保存。**微軟登入需要先申請**，步驟見 [docs/microsoft-login.md](docs/microsoft-login.md)。
 
 ## 資料位置
@@ -54,7 +56,7 @@
 
 美術由 `tools/make_art.py` 產生：`python tools/make_art.py`。
 
-自動檢查：`mistinn-launcher.exe --selftest <版本> <smooth|normal|ultra> <測試名稱> [霧宿模組 jar]` 會在不開視窗的情況下，完整安裝並啟動一次遊戲（需要 `dev_offline`）。
+自動檢查：`mistinn-launcher.exe --selftest <版本> <smooth|normal|ultra> <角色名稱> [霧宿模組 jar]` 會在不開視窗的情況下，完整安裝並啟動一次遊戲。
 
 ## 授權與致謝
 

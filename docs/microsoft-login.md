@@ -38,8 +38,8 @@
 3. 啟動器依序換取 Xbox Live、XSTS 與 Minecraft 的權杖，並確認帳號擁有 Java 版。
 4. 權杖用 Windows DPAPI 加密後存在 `accounts.dat`，只有同一個 Windows 使用者解得開。
 
-## 離線測試帳號
+## 離線帳號
 
-開發時，可以在 `launcher.json` 加上 `"dev_offline": true`，啟動器就會顯示「加入離線測試帳號」。這個功能只給開發測試用，對外發佈的版本請不要開啟。
+在啟動器輸入角色名稱，按「加入離線帳號」就能使用。離線帳號可在本機遊玩並自訂皮膚，無須設定 `launcher.json`。
 
 參考資料：[Microsoft Authentication Scheme（minecraft.wiki）](https://minecraft.wiki/w/Minecraft_Wiki:Projects/wiki.vg_merge/Microsoft_Authentication_Scheme)

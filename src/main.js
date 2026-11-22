@@ -63,7 +63,7 @@ function renderAccounts(list) {
     row.tabIndex = 0;
     row.innerHTML = `<canvas class="face" width="8" height="8" aria-hidden="true"></canvas><span class="name"></span>`
       + (a.kind === "offline" ? `<button class="skin" title="離線皮膚">皮膚</button>` : "")
-      + `<span class="kind">${a.kind === "microsoft" ? "微軟" : "離線測試"}</span><button class="remove" title="移除">×</button>`;
+      + `<span class="kind">${a.kind === "microsoft" ? "微軟" : "離線"}</span><button class="remove" title="移除">×</button>`;
     row.querySelector(".name").textContent = a.name;
     drawFace(row.querySelector(".face"), a.skin);
     const skinButton = row.querySelector(".skin");
@@ -272,7 +272,16 @@ async function main() {
 
   $("ms-login").disabled = !state.microsoft_ready;
   $("ms-note").hidden = state.microsoft_ready;
-  $("offline-form").hidden = !state.dev_offline;
+
+  $("offline-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      renderAccounts(await invoke("add_offline", { name: $("offline-name").value }));
+      $("offline-name").value = "";
+    } catch (err) {
+      showError(String(err));
+    }
+  });
 
   const select = $("version");
   const main = document.createElement("option");
@@ -295,15 +304,6 @@ async function main() {
 
   $("play").addEventListener("click", play);
   $("ms-login").addEventListener("click", microsoftLogin);
-  $("offline-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    try {
-      renderAccounts(await invoke("add_offline", { name: $("offline-name").value }));
-      $("offline-name").value = "";
-    } catch (err) {
-      showError(String(err));
-    }
-  });
   $("open-folder").addEventListener("click", () => invoke("open_instance", { version: $("version").value }));
   $("skin-pick").addEventListener("click", () => $("skin-file").click());
   $("skin-file").addEventListener("change", async () => {
@@ -363,7 +363,6 @@ function mockInvoke(command) {
       presets,
       accounts: [{ name: "Hunter", kind: "offline" }],
       microsoft_ready: false,
-      dev_offline: true,
       mistinn_version: "26.3",
       launcher_version: "0.1.0",
     },
