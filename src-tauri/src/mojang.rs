@@ -8,9 +8,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
 
+/// The list of every game version.
 const MANIFEST: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
+/// Where the game's assets are downloaded from, by hash.
 const RESOURCES: &str = "https://resources.download.minecraft.net";
 
+/// One game version in Mojang's list.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestEntry {
     pub id: String,
@@ -22,11 +25,13 @@ pub struct ManifestEntry {
     pub release_time: String,
 }
 
+/// Mojang's version list, as far as the launcher reads it.
 #[derive(Debug, Deserialize)]
 struct Manifest {
     versions: Vec<ManifestEntry>,
 }
 
+/// Every game version; the last list fetched is kept and used when offline.
 pub async fn manifest() -> Result<Vec<ManifestEntry>> {
     let cache = paths::versions().join("version_manifest_v2.json");
     match net::json::<Manifest>(MANIFEST).await {
@@ -53,8 +58,20 @@ pub async fn version_json(id: &str) -> Result<Value> {
             return Ok(value);
         }
     }
-    let entry = manifest().await?.into_iter().find(|v| v.id == id).ok_or_else(|| anyhow!("unknown version {id}"))?;
-    net::fetch_all(vec![Download { url: entry.url, path: path.clone(), sha1: Some(entry.sha1) }], |_, _| {}).await?;
+    let entry = manifest()
+        .await?
+        .into_iter()
+        .find(|v| v.id == id)
+        .ok_or_else(|| anyhow!("unknown version {id}"))?;
+    net::fetch_all(
+        vec![Download {
+            url: entry.url,
+            path: path.clone(),
+            sha1: Some(entry.sha1),
+        }],
+        |_, _| {},
+    )
+    .await?;
     Ok(serde_json::from_str(&std::fs::read_to_string(&path)?)?)
 }
 
@@ -86,6 +103,7 @@ pub fn rules_allow(rules: Option<&Value>) -> bool {
     allowed
 }
 
+/// This machine's operating system, in the words of a version's library rules.
 pub fn current_os() -> &'static str {
     if cfg!(windows) {
         "windows"
@@ -96,6 +114,7 @@ pub fn current_os() -> &'static str {
     }
 }
 
+/// A version's libraries, sorted for this machine.
 pub struct Libraries {
     pub downloads: Vec<Download>,
     pub classpath: Vec<PathBuf>,
@@ -105,7 +124,11 @@ pub struct Libraries {
 
 /// Libraries for this machine: what to download, what goes on the classpath, what to unpack.
 pub fn libraries(version: &Value) -> Libraries {
-    let mut out = Libraries { downloads: vec![], classpath: vec![], natives: vec![] };
+    let mut out = Libraries {
+        downloads: vec![],
+        classpath: vec![],
+        natives: vec![],
+    };
     let os = current_os();
     for lib in version.get("libraries").and_then(|l| l.as_array()).into_iter().flatten() {
         if !rules_allow(lib.get("rules")) {
@@ -135,6 +158,7 @@ pub fn libraries(version: &Value) -> Libraries {
     out
 }
 
+/// A library artifact as a download into the libraries folder; `None` without a URL.
 fn artifact_download(artifact: &Value) -> Option<Download> {
     let path = artifact.get("path")?.as_str()?;
     let url = artifact.get("url")?.as_str()?;
@@ -148,6 +172,7 @@ fn artifact_download(artifact: &Value) -> Option<Download> {
     })
 }
 
+/// The game's own jar for a version.
 pub fn client_jar(version: &Value, id: &str) -> Result<Download> {
     let client = version.pointer("/downloads/client").context("version has no client download")?;
     Ok(Download {
@@ -175,7 +200,9 @@ pub async fn assets(version: &Value) -> Result<(String, Vec<Download>)> {
     let mut downloads = vec![];
     if let Some(objects) = parsed.get("objects").and_then(|o| o.as_object()) {
         for object in objects.values() {
-            let Some(hash) = object.get("hash").and_then(|h| h.as_str()) else { continue };
+            let Some(hash) = object.get("hash").and_then(|h| h.as_str()) else {
+                continue;
+            };
             let prefix = &hash[..2];
             downloads.push(Download {
                 url: format!("{RESOURCES}/{prefix}/{hash}"),

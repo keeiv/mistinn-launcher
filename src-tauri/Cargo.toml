@@ -5,6 +5,29 @@ description = "霧宿啟動器 (Mistinn Launcher)"
 authors = ["森之宿茶室 MoriTeahouse"]
 edition = "2021"
 publish = false
+license = "AGPL-3.0-only"
+
+# Checked in CI by `cargo clippy --all-targets -- -D warnings` (see CONTRIBUTING.md).
+[lints.rust]
+# memory: unsafe code only where a module opts in (Windows API calls), and every operation inside an
+# unsafe fn still marked unsafe
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+# memory: each unsafe block says why it is sound and holds one unsafe operation; nothing is leaked on purpose
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+mem_forget = "deny"
+rc_buffer = "deny"
+# comments: doc comments that read as sentences
+empty_docs = "deny"
+doc_lazy_continuation = "deny"
+too_long_first_doc_paragraph = "deny"
+# the launch sequence reads best top to bottom in one function
+too_many_lines = "allow"
 
 [build-dependencies]
 tauri-build = { version = "2.7.6", features = [] }

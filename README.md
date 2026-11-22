@@ -1,9 +1,31 @@
-# 霧宿啟動器（Mistinn Launcher）
+<div align="center">
+
+[EN](docs/README.en.md) | **繁中**
+
+<img src="src-tauri/icons/icon.png" alt="" width="96">
+
+# 霧宿啟動器
+
+**為《霧宿：追放》準備好一切的 Minecraft 啟動器。**
+
+[![CI](https://github.com/keeiv/mistinn-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/keeiv/mistinn-launcher/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/keeiv/mistinn-launcher?label=release)](https://github.com/keeiv/mistinn-launcher/releases/latest)
+![Windows](https://img.shields.io/badge/windows-10%20%7C%2011-0078D4)
+![License](https://img.shields.io/badge/license-AGPL--3.0--only-F99549)
+
+[森之宿茶室](https://moriteahouse.shizune.life) ·
+[霧宿：追放](https://github.com/keeiv/mistinn-exile) ·
+[下載](https://github.com/keeiv/mistinn-launcher/releases/latest) ·
+[貢獻指南](CONTRIBUTING.md)
+
+</div>
 
 > **目前是離線啟動器**：請使用離線帳號遊玩，微軟帳號登入還不能用。
 > <sub>因為作者沒申請到</sub>
 
-為《霧宿：追放》準備好一切的 Minecraft 啟動器。按下「出發」，它會下載遊戲、Java、Fabric、本模組與一整套優化模組，並依你的電腦調好設定。
+按下「出發」，它會下載遊戲、Java、Fabric、《霧宿：追放》與一整套優化模組，並依你的電腦調好設定。
+
+![霧宿啟動器的畫面：左邊是霧中的海岸、熄燈的燈塔與海裡的錨，右邊是遊戲版本、三種遊玩模式、帳號與出發按鈕](docs/images/launcher.png)
 
 ## 下載
 
@@ -20,13 +42,13 @@
 
 啟動器會讀取記憶體、CPU 執行緒和顯示卡（Windows 上透過 DXGI 讀取專用顯示記憶體），替三種模式各自算出適合的數值，並標出建議的那一個。
 
-| | 流暢 | 普通 | 超高 |
-|---|---|---|---|
-| 記憶體 | 約 1/4，最多 4 GB | 約 1/3，最多 6 GB | 約 2/5，最多 8 GB |
-| 視距（弱／中／強顯卡） | 6／8／10 | 8／12／14 | 12／16／24 |
-| 畫質 | 流暢 | 精緻 | 極致（弱顯卡改為精緻） |
-| 粒子、雲 | 最少、關 | 減少、快速 | 全部、精緻 |
-| 光影 | 關 | 關 | 顯示記憶體 6 GB 以上時開啟 Iris 與 Complementary Reimagined |
+|                        | 流暢              | 普通              | 超高                                                        |
+| ---------------------- | ----------------- | ----------------- | ----------------------------------------------------------- |
+| 記憶體                 | 約 1/4，最多 4 GB | 約 1/3，最多 6 GB | 約 2/5，最多 8 GB                                           |
+| 視距（弱／中／強顯卡） | 6／8／10          | 8／12／14         | 12／16／24                                                  |
+| 畫質                   | 流暢              | 精緻              | 極致（弱顯卡改為精緻）                                      |
+| 粒子、雲               | 最少、關          | 減少、快速        | 全部、精緻                                                  |
+| 光影                   | 關                | 關                | 顯示記憶體 6 GB 以上時開啟 Iris 與 Complementary Reimagined |
 
 - 記憶體至少留 3 GB 給系統，遊戲至少 2 GB。
 - 模擬距離依 CPU 執行緒數設上限。
@@ -59,6 +81,8 @@
 全部放在 `%APPDATA%\.mistinn`：`versions`、`libraries`、`assets`、`runtimes`（Java）、`instances`（每個版本各自的遊戲資料夾）。
 
 ## 建置
+
+想參與開發的話，請先讀[貢獻指南](CONTRIBUTING.md)。
 
 需要 Rust（MSVC 工具鏈）、Node.js 和 Visual Studio Build Tools。先執行一次 `npm ci` 安裝 Tauri CLI。
 

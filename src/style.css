@@ -22,9 +22,12 @@
   color-scheme: dark;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html, body {
+html,
+body {
   margin: 0;
   height: 100%;
   overflow: hidden;
@@ -44,9 +47,16 @@ html, body {
 }
 
 /* a pixel frame: square corners cut by one pixel step */
-.panel, .code, select, input, .preset, .log {
+.panel,
+.code,
+select,
+input,
+.preset,
+.log {
   border: var(--px) solid var(--line);
-  box-shadow: 0 0 0 var(--px) var(--night), inset var(--px) var(--px) 0 rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 0 0 var(--px) var(--night),
+    inset var(--px) var(--px) 0 rgba(255, 255, 255, 0.06);
 }
 
 .title {
@@ -82,27 +92,56 @@ html, body {
   overflow-y: auto;
 }
 
-.block { display: flex; flex-direction: column; gap: 8px; }
-.label { color: var(--gold-light); font-size: 14px; }
-.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.label {
+  color: var(--gold-light);
+  font-size: 14px;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
 
-select, input {
+select,
+input {
   font: inherit;
   color: var(--ink);
   background: var(--night-2);
   padding: 6px 8px;
   outline: none;
 }
-select:focus-visible, input:focus-visible, .btn:focus-visible, .preset:focus-visible {
+select:focus-visible,
+input:focus-visible,
+.btn:focus-visible,
+.preset:focus-visible {
   outline: var(--px) solid var(--gold);
   outline-offset: 2px;
 }
 
-.note { margin: 0; font-size: 13px; color: var(--ink-dim); line-height: 1.5; }
-.note.warn { color: var(--warn); }
-.note.error { color: var(--bad); }
+.note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-dim);
+  line-height: 1.5;
+}
+.note.warn {
+  color: var(--warn);
+}
+.note.error {
+  color: var(--bad);
+}
 
-.presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
 .preset {
   font: inherit;
   color: var(--ink);
@@ -114,16 +153,32 @@ select:focus-visible, input:focus-visible, .btn:focus-visible, .preset:focus-vis
   flex-direction: column;
   gap: 4px;
 }
-.preset .name { font-size: 18px; }
-.preset .detail { font-size: 12px; color: var(--ink-dim); line-height: 1.45; }
-.preset .tag { font-size: 12px; color: var(--gold); min-height: 14px; }
+.preset .name {
+  font-size: 18px;
+}
+.preset .detail {
+  font-size: 12px;
+  color: var(--ink-dim);
+  line-height: 1.45;
+}
+.preset .tag {
+  font-size: 12px;
+  color: var(--gold);
+  min-height: 14px;
+}
 .preset[aria-checked="true"] {
   border-color: var(--gold);
   background: #2c2620;
-  box-shadow: 0 0 0 var(--px) var(--night), inset 0 0 0 var(--px) rgba(232, 179, 58, 0.35);
+  box-shadow:
+    0 0 0 var(--px) var(--night),
+    inset 0 0 0 var(--px) rgba(232, 179, 58, 0.35);
 }
 
-.accounts { display: flex; flex-direction: column; gap: 4px; }
+.accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .account {
   display: flex;
   align-items: center;
@@ -132,18 +187,69 @@ select:focus-visible, input:focus-visible, .btn:focus-visible, .preset:focus-vis
   background: var(--night-2);
   cursor: pointer;
 }
-.account[aria-checked="true"] { outline: var(--px) solid var(--gold); }
-.account .kind { font-size: 12px; color: var(--ink-dim); margin-left: auto; }
-.account .remove { font: inherit; background: none; border: 0; color: var(--ink-dim); cursor: pointer; }
-.account .remove:hover { color: var(--bad); }
-.account .face { width: 16px; height: 16px; image-rendering: pixelated; flex: none; }
-.account .skin { font: inherit; font-size: 12px; background: none; border: 0; color: var(--ink-dim); cursor: pointer; }
-.account .skin:hover { color: var(--gold); }
-.skin-panel { display: flex; gap: 12px; align-items: flex-start; margin-top: 8px; padding: 8px; background: var(--night-2); }
-.skin-panel[hidden] { display: none; }
-.skin-face { width: 64px; height: 64px; image-rendering: pixelated; flex: none; background: var(--night); }
-.skin-controls { display: flex; flex-direction: column; gap: 6px; }
-.skin-controls label { font-size: 13px; margin-right: 12px; cursor: pointer; }
+.account[aria-checked="true"] {
+  outline: var(--px) solid var(--gold);
+}
+.account .kind {
+  font-size: 12px;
+  color: var(--ink-dim);
+  margin-left: auto;
+}
+.account .remove {
+  font: inherit;
+  background: none;
+  border: 0;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+.account .remove:hover {
+  color: var(--bad);
+}
+.account .face {
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+  flex: none;
+}
+.account .skin {
+  font: inherit;
+  font-size: 12px;
+  background: none;
+  border: 0;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+.account .skin:hover {
+  color: var(--gold);
+}
+.skin-panel {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--night-2);
+}
+.skin-panel[hidden] {
+  display: none;
+}
+.skin-face {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  flex: none;
+  background: var(--night);
+}
+.skin-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.skin-controls label {
+  font-size: 13px;
+  margin-right: 12px;
+  cursor: pointer;
+}
 
 .btn {
   font: inherit;
@@ -152,22 +258,60 @@ select:focus-visible, input:focus-visible, .btn:focus-visible, .preset:focus-vis
   border: 0;
   padding: 8px 14px;
   cursor: pointer;
-  box-shadow: inset calc(-1 * var(--px)) calc(-1 * var(--px)) 0 #7a6326, inset var(--px) var(--px) 0 var(--gold-light);
+  box-shadow:
+    inset calc(-1 * var(--px)) calc(-1 * var(--px)) 0 #7a6326,
+    inset var(--px) var(--px) 0 var(--gold-light);
 }
-.btn:hover { background: var(--gold-light); }
-.btn:active { box-shadow: inset var(--px) var(--px) 0 #7a6326; }
-.btn:disabled { background: #4a4550; color: var(--ink-dim); cursor: default; box-shadow: none; }
-.btn.small { font-size: 14px; padding: 6px 10px; }
-.btn.play { font-size: 26px; padding: 12px; letter-spacing: 8px; }
+.btn:hover {
+  background: var(--gold-light);
+}
+.btn:active {
+  box-shadow: inset var(--px) var(--px) 0 #7a6326;
+}
+.btn:disabled {
+  background: #4a4550;
+  color: var(--ink-dim);
+  cursor: default;
+  box-shadow: none;
+}
+.btn.small {
+  font-size: 14px;
+  padding: 6px 10px;
+}
+.btn.play {
+  font-size: 26px;
+  padding: 12px;
+  letter-spacing: 8px;
+}
 
-.go { margin-top: auto; }
+.go {
+  margin-top: auto;
+}
 
-.progress .bar { height: 12px; background: var(--night-2); border: var(--px) solid var(--line); }
-.progress .fill { height: 100%; width: 0; background: repeating-linear-gradient(90deg, var(--rust-light) 0 6px, var(--rust) 6px 8px); }
+.progress .bar {
+  height: 12px;
+  background: var(--night-2);
+  border: var(--px) solid var(--line);
+}
+.progress .fill {
+  height: 100%;
+  width: 0;
+  background: repeating-linear-gradient(90deg, var(--rust-light) 0 6px, var(--rust) 6px 8px);
+}
 
-.code { padding: 10px; background: var(--night-2); }
-.code p { margin: 0 0 6px; font-size: 14px; }
-.big-code { font-size: 28px; letter-spacing: 6px; color: var(--gold-light); }
+.code {
+  padding: 10px;
+  background: var(--night-2);
+}
+.code p {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.big-code {
+  font-size: 28px;
+  letter-spacing: 6px;
+  color: var(--gold-light);
+}
 
 .footer {
   position: fixed;
@@ -184,9 +328,22 @@ select:focus-visible, input:focus-visible, .btn:focus-visible, .preset:focus-vis
   font-size: 13px;
   color: var(--ink-dim);
 }
-.footer .links { display: flex; gap: 16px; align-items: center; }
-.link { font: inherit; background: none; border: 0; color: var(--ink-dim); cursor: pointer; padding: 0; }
-.link:hover { color: var(--gold-light); }
+.footer .links {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.link {
+  font: inherit;
+  background: none;
+  border: 0;
+  color: var(--ink-dim);
+  cursor: pointer;
+  padding: 0;
+}
+.link:hover {
+  color: var(--gold-light);
+}
 
 .log {
   position: fixed;
@@ -198,7 +355,9 @@ select:focus-visible, input:focus-visible, .btn:focus-visible, .preset:focus-vis
   padding: 10px;
   overflow: auto;
   background: rgba(12, 12, 18, 0.94);
-  font: 12px/1.4 Consolas, monospace;
+  font:
+    12px/1.4 Consolas,
+    monospace;
   color: #c7c4cc;
   user-select: text;
   white-space: pre-wrap;

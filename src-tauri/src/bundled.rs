@@ -6,10 +6,9 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
-/// The version of the bundled mod, from `resources/mods/mistinn.version` (see build.rs).
-pub const MISTINN_MOD_VERSION: &str = env!("MISTINN_MOD_VERSION");
-/// File name the bundled mod is written out under.
+/// File name the bundled mod is written out under: its version comes from `resources/mods/mistinn.version` (see build.rs).
 pub const MISTINN_JAR_NAME: &str = concat!("mistinn-", env!("MISTINN_MOD_VERSION"), ".jar");
+/// The mod jar itself, compiled into the binary.
 const MISTINN_JAR: &[u8] = include_bytes!("../resources/mods/mistinn.jar");
 
 /// Writes the bundled mod into `dir` (only when missing or different), drops the jars of earlier
@@ -25,12 +24,14 @@ fn remove_other_versions(dir: &Path, keep: &str) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
-        if name != keep && name.starts_with("mistinn-") && name.ends_with(".jar") {
+        let jar = Path::new(&name).extension().is_some_and(|e| e.eq_ignore_ascii_case("jar"));
+        if name != keep && name.starts_with("mistinn-") && jar {
             let _ = std::fs::remove_file(entry.path());
         }
     }
 }
 
+/// Writes `bytes` to `dir/name` unless the file already holds exactly them, and returns its path.
 fn write_if_changed(dir: &Path, name: &str, bytes: &[u8]) -> Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
     let path = dir.join(name);
@@ -56,8 +57,9 @@ mod tests {
 
     #[test]
     fn embedded_name_carries_the_mod_version() {
-        assert_eq!(MISTINN_JAR_NAME, format!("mistinn-{MISTINN_MOD_VERSION}.jar"));
-        assert_eq!(MISTINN_MOD_VERSION.split('.').count(), 3);
+        let version = env!("MISTINN_MOD_VERSION");
+        assert_eq!(MISTINN_JAR_NAME, format!("mistinn-{version}.jar"));
+        assert_eq!(version.split('.').count(), 3);
     }
 
     #[test]

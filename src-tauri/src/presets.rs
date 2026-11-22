@@ -5,8 +5,10 @@
 use crate::hardware::Hardware;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::Path;
 
+/// The three ways to play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Preset {
@@ -15,6 +17,7 @@ pub enum Preset {
     Ultra,
 }
 
+/// What one way to play sets, worked out for this computer.
 #[derive(Debug, Clone, Serialize)]
 pub struct Settings {
     pub preset: Preset,
@@ -31,6 +34,7 @@ pub struct Settings {
     pub shaders: bool,
 }
 
+/// The settings of one way to play on this computer.
 pub fn settings(preset: Preset, hw: &Hardware) -> Settings {
     let gpu = hw.gpu_class;
     let pick = |weak: u32, mid: u32, strong: u32| match gpu {
@@ -39,17 +43,23 @@ pub fn settings(preset: Preset, hw: &Hardware) -> Settings {
         _ => weak,
     };
     // leave the system at least 3 GB, never give the game less than 2 GB
-    let share = |fraction: f64, cap: u64| -> u64 {
-        let wanted = ((hw.ram_mb as f64 * fraction) as u64).min(cap);
+    let share = |parts: u64, of: u64, cap: u64| -> u64 {
+        let wanted = (hw.ram_mb * parts / of).min(cap);
         let ceiling = hw.ram_mb.saturating_sub(3072).max(2048);
         (wanted.max(2048).min(ceiling) / 256) * 256
     };
     // few CPU threads cannot feed long simulation distances
-    let sim_cap = if hw.threads <= 4 { 6 } else if hw.threads <= 8 { 10 } else { 12 };
+    let sim_cap = if hw.threads <= 4 {
+        6
+    } else if hw.threads <= 8 {
+        10
+    } else {
+        12
+    };
     match preset {
         Preset::Smooth => Settings {
             preset,
-            memory_mb: share(0.25, 4096),
+            memory_mb: share(1, 4, 4096),
             render_distance: pick(6, 8, 10),
             simulation_distance: 5.min(sim_cap),
             graphics: "fast",
@@ -63,7 +73,7 @@ pub fn settings(preset: Preset, hw: &Hardware) -> Settings {
         },
         Preset::Normal => Settings {
             preset,
-            memory_mb: share(0.33, 6144),
+            memory_mb: share(33, 100, 6144),
             render_distance: pick(8, 12, 14),
             simulation_distance: 8.min(sim_cap),
             graphics: "fancy",
@@ -77,7 +87,7 @@ pub fn settings(preset: Preset, hw: &Hardware) -> Settings {
         },
         Preset::Ultra => Settings {
             preset,
-            memory_mb: share(0.4, 8192),
+            memory_mb: share(2, 5, 8192),
             render_distance: pick(12, 16, 24),
             simulation_distance: 12.min(sim_cap),
             graphics: if gpu == "weak" { "fancy" } else { "fabulous" },
@@ -134,7 +144,10 @@ pub fn write_options(path: &Path, s: &Settings, first_time: bool) -> std::io::Re
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let text: String = lines.into_iter().map(|(k, v)| format!("{k}:{v}\n")).collect();
+    let text = lines.into_iter().fold(String::new(), |mut text, (k, v)| {
+        let _ = writeln!(text, "{k}:{v}");
+        text
+    });
     std::fs::write(path, text)
 }
 
@@ -149,7 +162,13 @@ mod tests {
             cpu: String::new(),
             gpu: String::new(),
             vram_mb: vram_gb * 1024,
-            gpu_class: if vram_gb >= 6 { "strong" } else if vram_gb >= 2 { "mid" } else { "weak" },
+            gpu_class: if vram_gb >= 6 {
+                "strong"
+            } else if vram_gb >= 2 {
+                "mid"
+            } else {
+                "weak"
+            },
         }
     }
 
@@ -160,7 +179,11 @@ mod tests {
             for preset in [Preset::Smooth, Preset::Normal, Preset::Ultra] {
                 let s = settings(preset, &hw);
                 assert!(s.memory_mb >= 2048 || hw.ram_mb < 5 * 1024, "{ram} GB {preset:?}");
-                assert!(s.memory_mb + 3072 <= hw.ram_mb.max(5 * 1024), "{ram} GB {preset:?} gives {}", s.memory_mb);
+                assert!(
+                    s.memory_mb + 3072 <= hw.ram_mb.max(5 * 1024),
+                    "{ram} GB {preset:?} gives {}",
+                    s.memory_mb
+                );
             }
         }
     }
@@ -168,11 +191,18 @@ mod tests {
     #[test]
     fn presets_climb_in_quality() {
         let hw = machine(16, 12, 16);
-        let (a, b, c) = (settings(Preset::Smooth, &hw), settings(Preset::Normal, &hw), settings(Preset::Ultra, &hw));
+        let (a, b, c) = (
+            settings(Preset::Smooth, &hw),
+            settings(Preset::Normal, &hw),
+            settings(Preset::Ultra, &hw),
+        );
         assert!(a.render_distance < b.render_distance && b.render_distance < c.render_distance);
         assert!(a.memory_mb <= b.memory_mb && b.memory_mb <= c.memory_mb);
         assert!(c.shaders && !b.shaders && !a.shaders);
-        assert!(!settings(Preset::Ultra, &machine(16, 1, 8)).shaders, "no shaders on integrated graphics");
+        assert!(
+            !settings(Preset::Ultra, &machine(16, 1, 8)).shaders,
+            "no shaders on integrated graphics"
+        );
     }
 
     #[test]

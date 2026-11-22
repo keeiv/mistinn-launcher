@@ -8,7 +8,14 @@ const listen = tauri ? tauri.event.listen : () => Promise.resolve();
 const $ = (id) => document.getElementById(id);
 const PRESET_NAMES = { smooth: "流暢", normal: "普通", ultra: "超高" };
 const GRAPHICS = { fast: "流暢畫質", fancy: "精緻畫質", fabulous: "極致畫質" };
-const STAGES = { version: "讀取版本資訊", java: "準備 Java", libraries: "下載函式庫", assets: "下載遊戲資源", mods: "安裝模組", start: "啟動遊戲" };
+const STAGES = {
+  version: "讀取版本資訊",
+  java: "準備 Java",
+  libraries: "下載函式庫",
+  assets: "下載遊戲資源",
+  mods: "安裝模組",
+  start: "啟動遊戲",
+};
 
 let state = null;
 let preset = "normal";
@@ -17,10 +24,12 @@ let accounts = [];
 /** The offline account whose skin panel is open, or -1. */
 let skinFor = -1;
 
+// Megabytes as gigabytes, for the hardware line and the presets.
 function gb(mb) {
   return (mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1) + " GB";
 }
 
+// Draws the three ways to play, the chosen one checked.
 function renderPresets() {
   const box = $("presets");
   box.replaceChildren();
@@ -29,11 +38,7 @@ function renderPresets() {
     button.className = "preset";
     button.setAttribute("role", "radio");
     button.setAttribute("aria-checked", String(s.preset === preset));
-    const lines = [
-      `記憶體 ${gb(s.memory_mb)}`,
-      `視距 ${s.render_distance} · ${GRAPHICS[s.graphics]}`,
-      s.shaders ? "光影開啟" : "光影關閉",
-    ];
+    const lines = [`記憶體 ${gb(s.memory_mb)}`, `視距 ${s.render_distance} · ${GRAPHICS[s.graphics]}`, s.shaders ? "光影開啟" : "光影關閉"];
     button.innerHTML = `<span class="tag">${s.preset === state.recommended ? "建議" : ""}</span>
       <span class="name">${PRESET_NAMES[s.preset]}</span>
       <span class="detail">${lines.join("<br>")}</span>`;
@@ -45,6 +50,7 @@ function renderPresets() {
   }
 }
 
+// Draws the accounts, the chosen one marked, and keeps `list` as the current accounts.
 function renderAccounts(list) {
   accounts = list;
   const box = $("accounts");
@@ -61,9 +67,10 @@ function renderAccounts(list) {
     row.setAttribute("role", "radio");
     row.setAttribute("aria-checked", String(i === account));
     row.tabIndex = 0;
-    row.innerHTML = `<canvas class="face" width="8" height="8" aria-hidden="true"></canvas><span class="name"></span>`
-      + (a.kind === "offline" ? `<button class="skin" title="離線皮膚">皮膚</button>` : "")
-      + `<span class="kind">${a.kind === "microsoft" ? "微軟" : "離線"}</span><button class="remove" title="移除">×</button>`;
+    row.innerHTML =
+      `<canvas class="face" width="8" height="8" aria-hidden="true"></canvas><span class="name"></span>` +
+      (a.kind === "offline" ? `<button class="skin" title="離線皮膚">皮膚</button>` : "") +
+      `<span class="kind">${a.kind === "microsoft" ? "微軟" : "離線"}</span><button class="remove" title="移除">×</button>`;
     row.querySelector(".name").textContent = a.name;
     drawFace(row.querySelector(".face"), a.skin);
     const skinButton = row.querySelector(".skin");
@@ -114,6 +121,7 @@ function drawFace(canvas, dataUrl) {
   img.src = dataUrl;
 }
 
+// Opens the skin panel for an offline account, or closes it when there is none.
 function openSkin(index) {
   skinFor = index;
   const a = accounts[index];
@@ -125,6 +133,7 @@ function openSkin(index) {
   $("skin-clear").disabled = !a.skin;
 }
 
+// Reads an image file the player picked into an Image element.
 function loadImage(file) {
   return new Promise((resolve, reject) => {
     const fail = () => reject(new Error("無法讀取這張圖片。"));
@@ -133,7 +142,9 @@ function loadImage(file) {
     img.onerror = fail;
     // The launcher window's image policy allows data: URLs.
     const reader = new FileReader();
-    reader.onload = () => { img.src = reader.result; };
+    reader.onload = () => {
+      img.src = reader.result;
+    };
     reader.onerror = fail;
     reader.readAsDataURL(file);
   });
@@ -157,7 +168,12 @@ function toModern(img) {
 }
 
 // Where each arm's faces are, for both layers: [x, y] of the 16x16 block each lives in.
-const ARMS = [[40, 16], [40, 32], [32, 48], [48, 48]];
+const ARMS = [
+  [40, 16],
+  [40, 32],
+  [32, 48],
+  [48, 48],
+];
 
 /**
  * Converts the arms of a skin between wide (4 pixels) and slim (3 pixels): each face is copied
@@ -184,7 +200,7 @@ function convertArms(source, toSlim) {
       const [fromX, toX, fromW, toW] = toSlim ? [wx, sx, ww, sw] : [sx, wx, sw, ww];
       for (let c = 0; c < toW; c++) {
         // spread the columns: the last one repeats when widening, the third goes when narrowing
-        const src = Math.min(fromW - 1, toW > fromW && c === toW - 1 ? fromW - 1 : (toW < fromW && c >= 2 ? c + 1 : c));
+        const src = Math.min(fromW - 1, toW > fromW && c === toW - 1 ? fromW - 1 : toW < fromW && c >= 2 ? c + 1 : c);
         g.drawImage(source, bx + fromX + src, by + top, 1, height, bx + toX + c, by + top, 1, height);
       }
     }
@@ -192,11 +208,13 @@ function convertArms(source, toSlim) {
   return canvas;
 }
 
+// A canvas as PNG bytes, the way the Rust side takes them.
 function pngBytes(canvas) {
   const data = atob(canvas.toDataURL("image/png").split(",")[1]);
   return Array.from(data, (c) => c.charCodeAt(0));
 }
 
+// Saves a skin in both arm widths for the account whose panel is open.
 async function saveSkin(canvas, slimArms) {
   const wide = slimArms ? convertArms(canvas, false) : canvas;
   const slim = slimArms ? canvas : convertArms(canvas, true);
@@ -218,16 +236,20 @@ async function currentSkin() {
   return toModern(img);
 }
 
+// Shows the note that a version other than 霧宿's plays without the mod.
 function onVersionChange() {
   const v = $("version").value;
   $("version-note").hidden = v === state.mistinn_version;
 }
 
+// Shows an error under the play button, or hides it for an empty message.
 function showError(message) {
   $("error").hidden = !message;
   $("error").textContent = message || "";
 }
 
+// Starts the game with the chosen version, way to play and account, showing progress until it
+// closes.
 async function play() {
   showError("");
   $("play").disabled = true;
@@ -244,6 +266,7 @@ async function play() {
   }
 }
 
+// Runs a Microsoft sign-in: shows the code, waits for the player, adds the account.
 async function microsoftLogin() {
   showError("");
   try {
@@ -261,6 +284,7 @@ async function microsoftLogin() {
   }
 }
 
+// Loads the launcher's state and wires up the window.
 async function main() {
   state = await invoke("state");
   preset = state.recommended;
@@ -296,7 +320,7 @@ async function main() {
       o.textContent = `${v} · 一般遊玩`;
       select.append(o);
     }
-  } catch (e) {
+  } catch {
     showError("無法取得版本清單，請檢查網路。");
   }
   select.addEventListener("change", onVersionChange);
@@ -339,7 +363,8 @@ async function main() {
   listen("progress", ({ payload }) => {
     const pct = payload.total ? Math.round((payload.done / payload.total) * 100) : 0;
     $("bar-fill").style.width = pct + "%";
-    $("progress-text").textContent = `${STAGES[payload.stage] || payload.stage} ${payload.total > 1 ? `${payload.done}/${payload.total}` : ""}`;
+    $("progress-text").textContent =
+      `${STAGES[payload.stage] || payload.stage} ${payload.total > 1 ? `${payload.done}/${payload.total}` : ""}`;
   });
   listen("game-log", ({ payload }) => {
     const log = $("log");

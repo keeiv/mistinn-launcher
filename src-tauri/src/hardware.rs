@@ -2,6 +2,7 @@
 
 use serde::Serialize;
 
+/// What the launcher found on this computer.
 #[derive(Debug, Clone, Serialize)]
 pub struct Hardware {
     pub ram_mb: u64,
@@ -13,8 +14,9 @@ pub struct Hardware {
     pub gpu_class: &'static str,
 }
 
+/// Reads memory, CPU threads and the graphics card; whatever cannot be read gets a modest default.
 pub fn detect() -> Hardware {
-    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    let threads = std::thread::available_parallelism().map_or(4, std::num::NonZero::get);
     // if the system cannot be read, assume a modest 8 GB machine rather than fail
     let (ram_mb, cpu) = match sysinfo::System::new() {
         Ok(mut system) => {
@@ -34,35 +36,46 @@ pub fn detect() -> Hardware {
     } else {
         "weak"
     };
-    Hardware { ram_mb, threads, cpu, gpu, vram_mb, gpu_class }
+    Hardware {
+        ram_mb,
+        threads,
+        cpu,
+        gpu,
+        vram_mb,
+        gpu_class,
+    }
 }
 
+/// The graphics card with the most dedicated memory, by name, and that memory in MB; software
+/// adapters do not count.
 #[cfg(windows)]
+#[allow(unsafe_code)]
 fn gpu() -> (String, u64) {
     use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE};
     let mut best = (String::from("unknown"), 0u64);
-    // SAFETY: plain DXGI enumeration; every returned interface is released when dropped
-    unsafe {
-        let Ok(factory) = CreateDXGIFactory1::<IDXGIFactory1>() else {
-            return best;
-        };
-        let mut index = 0;
-        while let Ok(adapter) = factory.EnumAdapters1(index) {
-            index += 1;
-            let Ok(desc) = adapter.GetDesc1() else { continue };
-            if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32) != 0 {
-                continue;
-            }
-            let vram = desc.DedicatedVideoMemory as u64 / 1024 / 1024;
-            let name = String::from_utf16_lossy(&desc.Description).trim_end_matches('\0').to_string();
-            if vram > best.1 || best.0 == "unknown" {
-                best = (name, vram);
-            }
+    // SAFETY: creating a DXGI factory has no preconditions; the interface is released when dropped
+    let Ok(factory) = (unsafe { CreateDXGIFactory1::<IDXGIFactory1>() }) else {
+        return best;
+    };
+    let mut index = 0;
+    // SAFETY: `factory` is a live interface; each returned adapter is released when dropped
+    while let Ok(adapter) = unsafe { factory.EnumAdapters1(index) } {
+        index += 1;
+        // SAFETY: `adapter` is a live interface; the description is returned by value
+        let Ok(desc) = (unsafe { adapter.GetDesc1() }) else { continue };
+        if (desc.Flags & u32::try_from(DXGI_ADAPTER_FLAG_SOFTWARE.0).unwrap_or(0)) != 0 {
+            continue;
+        }
+        let vram = desc.DedicatedVideoMemory as u64 / 1024 / 1024;
+        let name = String::from_utf16_lossy(&desc.Description).trim_end_matches('\0').to_string();
+        if vram > best.1 || best.0 == "unknown" {
+            best = (name, vram);
         }
     }
     best
 }
 
+/// Outside Windows the graphics card is not read.
 #[cfg(not(windows))]
 fn gpu() -> (String, u64) {
     (String::from("unknown"), 0)

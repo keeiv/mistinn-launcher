@@ -13,11 +13,13 @@ use std::path::{Path, PathBuf};
 
 /// The pack's folder name under the instance's resourcepacks, and its id in options.txt.
 pub const PACK: &str = "mistinn-skin";
+/// The resource pack the offline skin is served from, as the game's options name it.
 const PACK_ID: &str = "file/mistinn-skin";
 
 /// The default skins since 1.19.3, each at `textures/entity/player/{wide,slim}/<name>.png`.
 const DEFAULTS: [&str; 9] = ["steve", "alex", "ari", "efe", "kai", "makena", "noor", "sunny", "zuri"];
 
+/// An offline skin, kept in both arm widths.
 pub struct Skin {
     pub wide: Vec<u8>,
     pub slim: Vec<u8>,
@@ -25,13 +27,19 @@ pub struct Skin {
     pub slim_arms: bool,
 }
 
+/// Where offline skins are kept.
 fn dir() -> PathBuf {
     paths::root().join("skins")
 }
 
+/// An account's skin files: the wide-armed image, the slim-armed one and the marker for slim arms.
 fn files(uuid: &str) -> (PathBuf, PathBuf, PathBuf) {
     let d = dir();
-    (d.join(format!("{uuid}-wide.png")), d.join(format!("{uuid}-slim.png")), d.join(format!("{uuid}-slim-arms")))
+    (
+        d.join(format!("{uuid}-wide.png")),
+        d.join(format!("{uuid}-slim.png")),
+        d.join(format!("{uuid}-slim-arms")),
+    )
 }
 
 /// A PNG image of exactly 64 by 64 pixels (the IHDR chunk follows the 8-byte signature).
@@ -45,6 +53,7 @@ pub fn is_skin_png(bytes: &[u8]) -> bool {
     width == 64 && height == 64
 }
 
+/// Saves an account's skin after checking both images are 64×64 PNGs.
 pub fn save(uuid: &str, skin: &Skin) -> Result<()> {
     if !is_skin_png(&skin.wide) || !is_skin_png(&skin.slim) {
         bail!("a skin is a 64×64 PNG image");
@@ -61,11 +70,17 @@ pub fn save(uuid: &str, skin: &Skin) -> Result<()> {
     Ok(())
 }
 
+/// An account's saved skin, if it has one.
 pub fn load(uuid: &str) -> Option<Skin> {
     let (wide, slim, arms) = files(uuid);
-    Some(Skin { wide: std::fs::read(wide).ok()?, slim: std::fs::read(slim).ok()?, slim_arms: arms.exists() })
+    Some(Skin {
+        wide: std::fs::read(wide).ok()?,
+        slim: std::fs::read(slim).ok()?,
+        slim_arms: arms.exists(),
+    })
 }
 
+/// Removes an account's skin: back to the default.
 pub fn remove(uuid: &str) -> Result<()> {
     let (wide, slim, arms) = files(uuid);
     for file in [wide, slim, arms] {
@@ -128,7 +143,13 @@ fn enable(options: &Path, on: bool) -> Result<()> {
         let index = lines.iter().position(|l| l.starts_with(&format!("{key}:")));
         let current: Vec<String> = index
             .and_then(|i| serde_json::from_str::<Vec<String>>(&lines[i][key.len() + 1..]).ok())
-            .unwrap_or_else(|| if key == "resourcePacks" { vec!["vanilla".to_string()] } else { vec![] });
+            .unwrap_or_else(|| {
+                if key == "resourcePacks" {
+                    vec!["vanilla".to_string()]
+                } else {
+                    vec![]
+                }
+            });
         let mut packs: Vec<String> = current.into_iter().filter(|p| p != PACK_ID).collect();
         if on && key == "resourcePacks" {
             // last in the list is on top
@@ -176,8 +197,14 @@ mod tests {
         enable(&options, true).unwrap();
         enable(&options, true).unwrap();
         let text = std::fs::read_to_string(&options).unwrap();
-        assert!(text.contains("resourcePacks:[\"vanilla\",\"fabric\",\"file/mistinn-skin\"]"), "{text}");
-        assert!(text.contains("incompatibleResourcePacks:[]"), "never on the incompatible list: {text}");
+        assert!(
+            text.contains("resourcePacks:[\"vanilla\",\"fabric\",\"file/mistinn-skin\"]"),
+            "{text}"
+        );
+        assert!(
+            text.contains("incompatibleResourcePacks:[]"),
+            "never on the incompatible list: {text}"
+        );
         assert!(text.contains("lang:zh_tw"));
         enable(&options, false).unwrap();
         let text = std::fs::read_to_string(&options).unwrap();

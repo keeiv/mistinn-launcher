@@ -1,0 +1,5 @@
+# Code style for the Rust side; CI runs `cargo fmt --check`.
+edition = "2021"
+max_width = 140
+use_field_init_shorthand = true
+use_try_shorthand = true
