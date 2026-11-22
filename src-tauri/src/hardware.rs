@@ -22,7 +22,7 @@ pub fn detect() -> Hardware {
         Ok(mut system) => {
             system.refresh_memory();
             system.refresh_cpu_all();
-            let cpu = system.cpus().first().map(|c| c.brand().trim().to_string()).unwrap_or_default();
+            let cpu = system.cpus().first().map_or_default(|c| c.brand().trim().to_string());
             (system.total_memory() / 1024 / 1024, cpu)
         }
         Err(_) => (8 * 1024, String::new()),

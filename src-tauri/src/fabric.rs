@@ -65,8 +65,7 @@ pub async fn profile(game_version: &str, loader: &str) -> Result<Profile> {
     let strings = |pointer: &str| -> Vec<String> {
         json.pointer(pointer)
             .and_then(|a| a.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-            .unwrap_or_default()
+            .map_or_default(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
     };
     Ok(Profile {
         main_class: json.get("mainClass").and_then(|m| m.as_str()).unwrap_or_default().to_string(),
