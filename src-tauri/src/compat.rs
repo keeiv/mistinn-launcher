@@ -27,8 +27,7 @@ pub fn manifest(jar: &[u8]) -> Option<Manifest> {
     let map = |key: &str| -> Vec<(String, Value)> {
         json.get(key)
             .and_then(|v| v.as_object())
-            .map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-            .unwrap_or_default()
+            .map_or_default(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
     };
     Some(Manifest {
         id: json.get("id")?.as_str()?.to_string(),
@@ -216,8 +215,7 @@ mod tests {
     fn m(id: &str, version: &str, breaks: Value, depends: Value) -> Manifest {
         let pairs = |v: Value| {
             v.as_object()
-                .map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-                .unwrap_or_default()
+                .map_or_default(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
         };
         Manifest {
             id: id.into(),
