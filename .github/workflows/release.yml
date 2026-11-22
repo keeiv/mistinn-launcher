@@ -1,0 +1,142 @@
+name: Release
+
+# Builds the launcher with the latest release of the 霧宿 mod built in, and publishes it as a
+# GitHub Release tagged v<launcher>-mod.<mod>. A new mod release therefore reaches the launcher by
+# itself: this checks every hour, can be run by hand, and runs at once when the mod repository
+# says it has released (a repository_dispatch, which needs a token on that side). When the
+# release for this launcher and this mod already exists, nothing is built.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [mistinn-released]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  MOD_REPO: keeiv/mistinn-exile
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      tag: ${{ steps.plan.outputs.tag }}
+      launcher: ${{ steps.plan.outputs.launcher }}
+      mod: ${{ steps.plan.outputs.mod }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compare the latest mod release with the launcher's releases
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mod_tag="$(gh release view --repo "$MOD_REPO" --json tagName -q .tagName)"
+          if [[ ! "$mod_tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "::error::unexpected mod release tag: $mod_tag"
+            exit 1
+          fi
+          mod="${BASH_REMATCH[1]}"
+          launcher="$(jq -r .version src-tauri/tauri.conf.json)"
+          if [[ ! "$launcher" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::unexpected launcher version: $launcher"
+            exit 1
+          fi
+          tag="v$launcher-mod.$mod"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            build=false
+            echo "$tag is already out"
+          else
+            build=true
+            echo "building $tag"
+          fi
+          {
+            echo "build=$build"
+            echo "tag=$tag"
+            echo "launcher=$launcher"
+            echo "mod=$mod"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      LAUNCHER: ${{ needs.plan.outputs.launcher }}
+      MOD: ${{ needs.plan.outputs.mod }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Install the Tauri CLI
+        run: npm ci
+      - name: Fetch the embedded mod
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./scripts/fetch-mod.ps1 -Version $env:MOD
+      - name: Test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - name: Build
+        run: npx tauri build
+      - name: Name the files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item src-tauri/target/release/mistinn-launcher.exe "out/MistinnLauncher_${env:LAUNCHER}_portable.exe"
+          $setup = Get-ChildItem src-tauri/target/release/bundle/nsis -Filter *-setup.exe | Select-Object -First 1
+          if (-not $setup) { throw "no installer was built" }
+          Copy-Item $setup.FullName "out/MistinnLauncher_${env:LAUNCHER}_x64-setup.exe"
+          Get-ChildItem out | ForEach-Object { "$($_.Name) $($_.Length)" }
+      - uses: actions/upload-artifact@v5
+        with:
+          name: launcher
+          path: out/*.exe
+          if-no-files-found: error
+
+  publish:
+    name: Publish
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+      LAUNCHER: ${{ needs.plan.outputs.launcher }}
+      MOD: ${{ needs.plan.outputs.mod }}
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: launcher
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<EOF
+          內嵌《霧宿：追放》$MOD（[模組的 Release](https://github.com/$MOD_REPO/releases/tag/v$MOD)）。
+
+          > **目前是離線啟動器**：請使用離線帳號遊玩，微軟帳號登入還不能用。
+          > <sub>因為作者沒申請到</sub>
+
+          - \`MistinnLauncher_${LAUNCHER}_x64-setup.exe\`：安裝版。
+          - \`MistinnLauncher_${LAUNCHER}_portable.exe\`：免安裝，直接執行。
+
+          啟動器沒有程式碼簽章，Windows 可能會先顯示「Windows 已保護您的電腦」，按「其他資訊」→「仍要執行」即可。
+          EOF
+          gh release create "$TAG" ./*.exe \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "霧宿啟動器 $LAUNCHER（霧宿：追放 $MOD）" \
+            --notes-file notes.md \
+            --latest

@@ -5,3 +5,5 @@ src-tauri/gen/
 *.log
 __pycache__/
 dist/
+# the embedded mod is fetched from its release (scripts/fetch-mod.ps1), never committed
+src-tauri/resources/mods/

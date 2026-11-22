@@ -1,6 +1,20 @@
 # 霧宿啟動器（Mistinn Launcher）
 
+> **目前是離線啟動器**：請使用離線帳號遊玩，微軟帳號登入還不能用。
+> <sub>因為作者沒申請到</sub>
+
 為《霧宿：追放》準備好一切的 Minecraft 啟動器。按下「出發」，它會下載遊戲、Java、Fabric、本模組與一整套優化模組，並依你的電腦調好設定。
+
+## 下載
+
+到 [Releases](https://github.com/keeiv/mistinn-launcher/releases) 下載最新版：
+
+- `MistinnLauncher_<版本>_x64-setup.exe`：安裝版。
+- `MistinnLauncher_<版本>_portable.exe`：免安裝，直接執行。
+
+每個版本都內嵌一份《霧宿：追放》模組，版本寫在 Release 的標題與 tag 上（例如 `v0.1.0-mod.0.1.0`）。[模組](https://github.com/keeiv/mistinn-exile)發布新版後，一小時內就會自動出一個內嵌新模組的啟動器。
+
+啟動器沒有程式碼簽章，Windows 可能會先顯示「Windows 已保護您的電腦」，按「其他資訊」→「仍要執行」即可。
 
 ## 三種模式
 
@@ -36,9 +50,9 @@
 
 ## 帳號
 
-所有玩家都可以直接加入離線帳號，在本機遊玩並自訂皮膚。角色名稱需使用 3 至 16 個英文字母、數字或底線。
+輸入角色名稱，按「加入離線帳號」就能遊玩，也能自訂皮膚。角色名稱需使用 3 至 16 個英文字母、數字或底線。
 
-微軟登入使用裝置代碼流程，啟動器不會經手密碼，權杖用 Windows DPAPI 加密保存。**微軟登入需要先申請**，步驟見 [docs/microsoft-login.md](docs/microsoft-login.md)。
+微軟帳號登入的程式已經寫好（裝置代碼流程，啟動器不會經手密碼，權杖用 Windows DPAPI 加密保存），但要等微軟核准啟動器使用 Minecraft API 才能開放，在那之前按鈕是停用的。申請的步驟見 [docs/microsoft-login.md](docs/microsoft-login.md)。
 
 ## 資料位置
 
@@ -46,7 +60,7 @@
 
 ## 建置
 
-需要 Rust（MSVC 工具鏈）、Node.js 和 Visual Studio Build Tools。
+需要 Rust（MSVC 工具鏈）、Node.js 和 Visual Studio Build Tools。先執行一次 `npm ci` 安裝 Tauri CLI。
 
 ```powershell
 .\build.ps1 test      # 單元測試
@@ -54,7 +68,9 @@
 .\build.ps1 build     # 產生安裝程式（NSIS）
 ```
 
-美術由 `tools/make_art.py` 產生：`python tools/make_art.py`。
+第一次建置時，`build.ps1` 會執行 `scripts/fetch-mod.ps1`，從模組最新的 Release 下載要內嵌的 JAR（核對 GitHub 記錄的 SHA-256），放在 `src-tauri/resources/mods`。這個資料夾不進版本控制。要內嵌指定版本：`.\scripts\fetch-mod.ps1 -Version 0.1.0`。
+
+背景與圖示取自模組的主選單美術。
 
 自動檢查：`mistinn-launcher.exe --selftest <版本> <smooth|normal|ultra> <角色名稱> [霧宿模組 jar]` 會在不開視窗的情況下，完整安裝並啟動一次遊戲。
 
@@ -62,4 +78,4 @@
 
 - 像素字型：[Fusion Pixel Font](https://github.com/TakWolf/fusion-pixel-font)，SIL Open Font License 1.1（`src/assets/fonts/Fusion-Pixel-LICENSE.txt`）。
 - 模組由 Modrinth 上的原作者發佈，啟動器只在玩家電腦上下載，不重新散佈。
-- 啟動器本身的授權尚未決定。
+- 啟動器以 [GNU AGPL-3.0](LICENSE) 授權，與《霧宿：追放》模組相同。

@@ -6,13 +6,29 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
-/// File name of the bundled mod jar; change it together with the file in `resources/mods`.
-pub const MISTINN_JAR_NAME: &str = "mistinn-0.1.0.jar";
-const MISTINN_JAR: &[u8] = include_bytes!("../resources/mods/mistinn-0.1.0.jar");
+/// The version of the bundled mod, from `resources/mods/mistinn.version` (see build.rs).
+pub const MISTINN_MOD_VERSION: &str = env!("MISTINN_MOD_VERSION");
+/// File name the bundled mod is written out under.
+pub const MISTINN_JAR_NAME: &str = concat!("mistinn-", env!("MISTINN_MOD_VERSION"), ".jar");
+const MISTINN_JAR: &[u8] = include_bytes!("../resources/mods/mistinn.jar");
 
-/// Writes the bundled mod into `dir` (only when missing or different) and returns its path.
+/// Writes the bundled mod into `dir` (only when missing or different), drops the jars of earlier
+/// versions left there, and returns its path.
 pub fn extract(dir: &Path) -> Result<PathBuf> {
-    write_if_changed(dir, MISTINN_JAR_NAME, MISTINN_JAR)
+    let path = write_if_changed(dir, MISTINN_JAR_NAME, MISTINN_JAR)?;
+    remove_other_versions(dir, MISTINN_JAR_NAME);
+    Ok(path)
+}
+
+/// Removes every `mistinn-*.jar` in `dir` but `keep`: an update leaves no stale copy behind.
+fn remove_other_versions(dir: &Path, keep: &str) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name != keep && name.starts_with("mistinn-") && name.ends_with(".jar") {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
 }
 
 fn write_if_changed(dir: &Path, name: &str, bytes: &[u8]) -> Result<PathBuf> {
@@ -36,6 +52,28 @@ mod tests {
     fn embedded_jar_is_a_zip() {
         assert!(MISTINN_JAR.len() > 1024);
         assert_eq!(&MISTINN_JAR[..2], b"PK");
+    }
+
+    #[test]
+    fn embedded_name_carries_the_mod_version() {
+        assert_eq!(MISTINN_JAR_NAME, format!("mistinn-{MISTINN_MOD_VERSION}.jar"));
+        assert_eq!(MISTINN_MOD_VERSION.split('.').count(), 3);
+    }
+
+    #[test]
+    fn an_update_removes_earlier_versions_only() {
+        let dir = std::env::temp_dir().join(format!("mistinn-bundled-versions-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["mistinn-0.1.0.jar", "mistinn-0.1.1.jar", "other-mod.jar", "mistinn-notes.txt"] {
+            std::fs::write(dir.join(name), b"x").unwrap();
+        }
+        remove_other_versions(&dir, "mistinn-0.1.1.jar");
+        assert!(!dir.join("mistinn-0.1.0.jar").exists());
+        assert!(dir.join("mistinn-0.1.1.jar").exists());
+        assert!(dir.join("other-mod.jar").exists());
+        assert!(dir.join("mistinn-notes.txt").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
