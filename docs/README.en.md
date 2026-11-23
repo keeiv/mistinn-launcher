@@ -72,6 +72,12 @@ A mod with no file for the chosen version is skipped and noted in the game log. 
 
 The version menu lists every full release. For anything other than 26.3 the launcher reminds you that **this version does not support Mistinn: Exile** and plays it plainly. Old versions Fabric does not support start as vanilla.
 
+## Updates
+
+At start the launcher asks GitHub for its latest release and compares it with the release and source commit it was built from. When a newer one is out, a small gold mark, **有新版本** (new version), appears by the version in the footer; it interrupts nothing. Clicking it opens the update window, which shows the current and the latest release and commit. **立即更新** (update now) downloads the new build, checks it against the SHA-256 GitHub records, replaces the running launcher and starts it again. Where the launcher's folder cannot be written (an install for every user), the new installer is started instead. No update runs while a game is starting.
+
+Only builds downloaded from Releases look for updates; a build of your own never does. 0.1.0 does not have this yet: download 0.1.1 or later by hand once.
+
 ## Accounts
 
 Type a player name and press **加入離線帳號** (add offline account) to play, with a skin of your own if you like. A name is 3 to 16 letters, digits or underscores.
@@ -98,7 +104,7 @@ On the first build, `build.ps1` runs `scripts/fetch-mod.ps1`, which downloads th
 
 The background and icons come from the mod's title-screen art.
 
-Self-test: `mistinn-launcher.exe --selftest <version> <smooth|normal|ultra> <player name> [mod jar]` installs and starts one game without opening the window.
+Self-test: `mistinn-launcher.exe --selftest <version> <smooth|normal|ultra> <player name> [mod jar]` installs and starts one game without opening the window; `--selftest-update` looks for, downloads, checks and swaps in the latest release without the window (and without restarting).
 
 ## License and thanks
 

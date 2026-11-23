@@ -333,6 +333,27 @@ input:focus-visible,
   gap: 16px;
   align-items: center;
 }
+/* a newer launcher is out: a small mark by the version, out of the way of everything else */
+.update-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold);
+}
+.update-mark[hidden] {
+  display: none;
+}
+.update-mark .dot {
+  width: 6px;
+  height: 6px;
+  background: var(--gold);
+  animation: glint 2.4s steps(2) infinite;
+}
+@keyframes glint {
+  50% {
+    opacity: 0.35;
+  }
+}
 .link {
   font: inherit;
   background: none;

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>更新霧宿啟動器</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="update.css" />
+  </head>
+  <body class="update-window">
+    <div class="update-scene" aria-hidden="true">
+      <div class="fog fog-back"></div>
+      <div class="rings"><span></span><span></span><span></span></div>
+      <img id="bell" class="bell" src="assets/icon.png" alt="" />
+      <div class="fog fog-front"></div>
+    </div>
+    <main class="update-panel">
+      <h1 id="title">有新版本</h1>
+      <p id="name" class="name"></p>
+      <dl class="compare">
+        <dt>目前</dt>
+        <dd id="current"></dd>
+        <dt>最新</dt>
+        <dd id="latest"></dd>
+      </dl>
+      <div id="progress" class="progress" hidden>
+        <div class="bar"><div id="fill" class="fill"></div></div>
+        <p id="status" class="status" role="status"></p>
+      </div>
+      <p id="error" class="error" role="alert" hidden></p>
+      <div id="actions" class="actions">
+        <button id="later" class="link">稍後再說</button>
+        <button id="start" class="btn">立即更新</button>
+      </div>
+    </main>
+    <script type="module" src="update.js"></script>
+  </body>
+</html>

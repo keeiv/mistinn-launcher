@@ -73,6 +73,9 @@ jobs:
     env:
       LAUNCHER: ${{ needs.plan.outputs.launcher }}
       MOD: ${{ needs.plan.outputs.mod }}
+      # compiled into the build, so it can tell a newer release from itself (src-tauri/src/update.rs)
+      MISTINN_RELEASE_TAG: ${{ needs.plan.outputs.tag }}
+      MISTINN_BUILD_COMMIT: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -131,6 +134,8 @@ jobs:
 
           - \`MistinnLauncher_${LAUNCHER}_x64-setup.exe\`：安裝版。
           - \`MistinnLauncher_${LAUNCHER}_portable.exe\`：免安裝，直接執行。
+
+          有新版本時，啟動器頁尾的版本號旁會出現「有新版本」，點一下就能更新（0.1.1 起）。
 
           啟動器沒有程式碼簽章，Windows 可能會先顯示「Windows 已保護您的電腦」，按「其他資訊」→「仍要執行」即可。
           EOF
