@@ -10,6 +10,9 @@ fn main() {
     println!("cargo:rerun-if-changed=resources/mods/mistinn.version");
     // the window and installer icons are compiled into the binary: rebuild when they change
     println!("cargo:rerun-if-changed=icons");
+    // a release build carries its tag and source commit, for the launcher to compare with the latest release
+    println!("cargo:rerun-if-env-changed=MISTINN_RELEASE_TAG");
+    println!("cargo:rerun-if-env-changed=MISTINN_BUILD_COMMIT");
     let version = std::fs::read_to_string(dir.join("mistinn.version"))
         .unwrap_or_default()
         .trim()

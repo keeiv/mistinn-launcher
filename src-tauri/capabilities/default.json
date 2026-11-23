@@ -1,7 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The launcher window: core APIs and events only.",
-  "windows": ["main"],
-  "permissions": ["core:default"]
+  "description": "The launcher window and its update window: core APIs and events only.",
+  "windows": [
+    "main",
+    "update"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close"
+  ]
 }

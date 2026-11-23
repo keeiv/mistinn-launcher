@@ -16,6 +16,7 @@ mod pack;
 mod paths;
 mod presets;
 mod skin;
+mod update;
 
 use auth::Account;
 use presets::Preset;
@@ -30,6 +31,8 @@ struct AppState {
     hardware: hardware::Hardware,
     accounts: Mutex<Vec<Account>>,
     launching: Mutex<bool>,
+    /// The newer launcher found at start, if any.
+    update: Mutex<Option<update::Available>>,
 }
 
 /// An account as the window shows it, without its tokens.
@@ -250,6 +253,32 @@ fn open_instance(version: String) -> Result<(), String> {
     Ok(())
 }
 
+/// `--selftest-update`: the update without the window, for automated checks. Asks for a newer
+/// release, downloads and checks it, and swaps it in for this exe (without starting it), printing
+/// each step and the new build's SHA-256.
+fn selftest_update() -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(async {
+        println!("this build: {:?} at {:?}", update::BUILD_TAG, update::BUILD_COMMIT);
+        let Some(found) = update::check().await else {
+            println!("no update offered");
+            return Ok(());
+        };
+        println!("offered: {} at {}", found.tag, found.commit);
+        let current = std::env::current_exe()?;
+        let new = update::incoming(&current);
+        update::download(&found.portable, &new, |done, total| {
+            if done == total {
+                println!("downloaded {done} bytes");
+            }
+        })
+        .await?;
+        update::swap(&current, &new)?;
+        println!("swapped in; expected sha256 {}", found.portable.sha256);
+        Ok(())
+    })
+}
+
 /// `--selftest <version> <smooth|normal|ultra> <offline name> [mistinn jar|-] [skin png]`: install
 /// and start without the window, printing progress, for automated checks. A skin given here is
 /// used as both its wide and slim version.
@@ -294,6 +323,99 @@ fn selftest(args: &[String]) -> anyhow::Result<()> {
     ))
 }
 
+/// Asks once, at start, whether a newer launcher is out, and keeps the answer for the update window.
+#[tauri::command]
+async fn update_check(app: tauri::AppHandle) -> Option<update::Available> {
+    let found = update::check().await;
+    app.state::<AppState>().update.lock().unwrap().clone_from(&found);
+    found
+}
+
+/// The newer launcher found at start, for the update window.
+#[tauri::command]
+fn update_info(app: tauri::State<'_, AppState>) -> Option<update::Available> {
+    app.update.lock().unwrap().clone()
+}
+
+/// Opens the update window, or brings it forward when it is already open.
+#[tauri::command]
+fn update_open(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("update") {
+        let _ = window.set_focus();
+        return Ok(());
+    }
+    tauri::WebviewWindowBuilder::new(&app, "update", tauri::WebviewUrl::App("update.html".into()))
+        .title("更新霧宿啟動器")
+        .inner_size(460.0, 380.0)
+        .resizable(false)
+        .center()
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// How far an update has got, sent to the update window.
+#[derive(Clone, Serialize)]
+struct UpdateProgress {
+    /// `download`, `install`, `installer` or `restart`.
+    stage: &'static str,
+    done: u64,
+    total: u64,
+}
+
+/// Downloads and installs the newer launcher found at start, then starts it. Not while a game is
+/// being started: the two would fight over the launcher.
+#[tauri::command]
+async fn update_apply(app: tauri::AppHandle) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let available = state.update.lock().unwrap().clone().ok_or("no update is available")?;
+    {
+        let mut busy = state.launching.lock().unwrap();
+        if *busy {
+            return Err("the game is starting: update after it has closed".into());
+        }
+        *busy = true;
+    }
+    let result = install_update(&app, &available).await;
+    if result.is_err() {
+        *state.launching.lock().unwrap() = false;
+    }
+    result.map_err(|e| format!("{e:#}"))
+}
+
+/// Puts the new build in place of the running one and starts it. Where the launcher's folder cannot
+/// be written (an install for every user), the release's installer is started instead.
+async fn install_update(app: &tauri::AppHandle, available: &update::Available) -> anyhow::Result<()> {
+    let send = |stage: &'static str, done: u64, total: u64| {
+        let _ = app.emit_to("update", "update-progress", UpdateProgress { stage, done, total });
+    };
+    let current = std::env::current_exe()?;
+    let new = update::incoming(&current);
+    let writable = std::fs::File::create(&new).is_ok();
+    let _ = std::fs::remove_file(&new);
+    let next = if writable {
+        update::download(&available.portable, &new, |done, total| send("download", done, total)).await?;
+        send("install", 0, 0);
+        update::swap(&current, &new)?;
+        send("restart", 0, 0);
+        current
+    } else {
+        let installer = available
+            .installer
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("the launcher's folder cannot be written, and the release has no installer"))?;
+        let path = std::env::temp_dir().join(&installer.name);
+        update::download(installer, &path, |done, total| send("download", done, total)).await?;
+        send("installer", 0, 0);
+        path
+    };
+    std::process::Command::new(&next).spawn()?;
+    // let the window show the last step before this launcher closes
+    tokio::time::sleep(std::time::Duration::from_millis(900)).await;
+    app.exit(0);
+    Ok(())
+}
+
 /// Starts the window, or with `--selftest` installs and starts one game without it.
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -304,11 +426,23 @@ fn main() {
         }
         return;
     }
+    if args.get(1).map(String::as_str) == Some("--selftest-update") {
+        if let Err(e) = selftest_update() {
+            eprintln!("update selftest failed: {e:#}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    // what the last update left behind: the build it replaced, or a download that never finished
+    if let Ok(exe) = std::env::current_exe() {
+        update::clean_up(&exe);
+    }
     tauri::Builder::default()
         .manage(AppState {
             hardware: hardware::detect(),
             accounts: Mutex::new(auth::load()),
             launching: Mutex::new(false),
+            update: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             state,
@@ -320,7 +454,11 @@ fn main() {
             microsoft_start,
             microsoft_finish,
             play,
-            open_instance
+            open_instance,
+            update_check,
+            update_info,
+            update_open,
+            update_apply
         ])
         .run(tauri::generate_context!())
         .expect("error while running the launcher");

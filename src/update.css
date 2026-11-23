@@ -1,0 +1,220 @@
+/* 霧宿啟動器 update window: the golden bell in drifting fog. It sways while it waits, swings and
+   rings while the new build comes down, and gives one last strike before the launcher restarts. */
+.update-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--night);
+}
+
+.update-scene {
+  position: relative;
+  height: 150px;
+  flex: none;
+  overflow: hidden;
+  background: url("assets/scene.png") center 40% / cover no-repeat;
+  image-rendering: pixelated;
+  border-bottom: var(--px) solid var(--line);
+}
+.update-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(21, 22, 31, 0.35), rgba(21, 22, 31, 0.75));
+}
+
+.bell {
+  position: absolute;
+  left: 50%;
+  top: 30px;
+  width: 64px;
+  height: 64px;
+  margin-left: -32px;
+  z-index: 2;
+  image-rendering: pixelated;
+  transform-origin: 50% 8%;
+  animation: sway 3.2s ease-in-out infinite;
+}
+
+.rings {
+  position: absolute;
+  left: 50%;
+  top: 62px;
+  z-index: 1;
+}
+.rings span {
+  position: absolute;
+  left: -20px;
+  top: -20px;
+  width: 40px;
+  height: 40px;
+  border: var(--px) solid var(--gold);
+  opacity: 0;
+}
+
+.fog {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 60px;
+  z-index: 3;
+  background-repeat: repeat-x;
+  background-size: auto 100%;
+  image-rendering: pixelated;
+  animation: drift 40s linear infinite;
+}
+.fog-back {
+  top: 58px;
+  background-image: url("assets/fog_far.png");
+  opacity: 0.8;
+}
+.fog-front {
+  bottom: -10px;
+  height: 70px;
+  background-image: url("assets/fog_near.png");
+  animation-duration: 24s;
+  animation-direction: reverse;
+}
+
+/* while the new build comes down: the bell swings and its rings spread */
+.update-window.working .bell {
+  animation: swing 0.9s ease-in-out infinite;
+}
+.update-window.working .rings span {
+  animation: ring 1.8s steps(6) infinite;
+}
+.update-window.working .rings span:nth-child(2) {
+  animation-delay: 0.6s;
+}
+.update-window.working .rings span:nth-child(3) {
+  animation-delay: 1.2s;
+}
+
+/* the last strike before the restart */
+.update-window.done .bell {
+  animation: strike 0.5s ease-out 2;
+}
+.update-window.done .rings span {
+  animation: ring 0.9s steps(5) infinite;
+}
+.update-window.done .update-scene::after {
+  animation: flash 0.9s ease-out;
+}
+
+@keyframes sway {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes swing {
+  0%,
+  100% {
+    transform: rotate(-16deg);
+  }
+  50% {
+    transform: rotate(16deg);
+  }
+}
+@keyframes strike {
+  0% {
+    transform: rotate(0) scale(1);
+  }
+  30% {
+    transform: rotate(-22deg) scale(1.08);
+  }
+  100% {
+    transform: rotate(0) scale(1);
+  }
+}
+@keyframes ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+@keyframes drift {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: 480px;
+  }
+}
+@keyframes flash {
+  0% {
+    background: rgba(240, 220, 140, 0.45);
+  }
+  100% {
+    background: linear-gradient(rgba(21, 22, 31, 0.35), rgba(21, 22, 31, 0.75));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bell,
+  .fog,
+  .rings span,
+  .update-window.working .bell,
+  .update-window.done .bell {
+    animation: none;
+  }
+}
+
+.update-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 22px 18px;
+  gap: 8px;
+}
+.update-panel h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: normal;
+  color: var(--gold);
+}
+.update-panel .name {
+  margin: 0;
+  color: var(--ink);
+}
+.compare {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+.compare dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.update-panel .status {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+.update-panel .error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bad);
+}
+.actions[hidden] {
+  display: none;
+}
+.actions {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 18px;
+}

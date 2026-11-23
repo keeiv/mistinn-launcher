@@ -2064,7 +2064,7 @@ dependencies = [
 
 [[package]]
 name = "mistinn-launcher"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2074,6 +2074,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha1",
+ "sha2 0.11.1",
  "sysinfo",
  "tauri",
  "tauri-build",

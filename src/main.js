@@ -360,6 +360,8 @@ async function main() {
   });
   $("toggle-log").addEventListener("click", () => ($("log").hidden = !$("log").hidden));
 
+  checkForUpdate();
+
   listen("progress", ({ payload }) => {
     const pct = payload.total ? Math.round((payload.done / payload.total) * 100) : 0;
     $("bar-fill").style.width = pct + "%";
@@ -374,7 +376,19 @@ async function main() {
   });
 }
 
+// Looks once, in the background, for a newer launcher; when there is one, a small mark by the version
+// opens the update window. No answer (offline, a build made outside a release) shows nothing.
+async function checkForUpdate() {
+  const found = await invoke("update_check").catch(() => null);
+  if (!found) return;
+  const mark = $("update");
+  mark.title = `${found.name}：點一下更新`;
+  mark.hidden = false;
+  mark.addEventListener("click", () => (tauri ? invoke("update_open") : window.open("update.html", "update", "width=460,height=380")));
+}
+
 // ── Stand-in for design checks in a browser ───────────────────────────
+// Sample answers for the window when it is opened in a plain browser.
 function mockInvoke(command) {
   const presets = [
     { preset: "smooth", memory_mb: 4096, render_distance: 10, graphics: "fast", shaders: false },
@@ -392,6 +406,8 @@ function mockInvoke(command) {
       launcher_version: "0.1.0",
     },
     versions: ["26.3", "26.2", "26.1.2", "1.21.11", "1.20.1"],
+    // a design check with ?update shows the mark for a newer launcher
+    update_check: location.search.includes("update") ? { name: "霧宿啟動器 0.1.1（霧宿：追放 0.1.0）" } : null,
   };
   const mock = answers.state.accounts;
   if (command === "set_skin") {
