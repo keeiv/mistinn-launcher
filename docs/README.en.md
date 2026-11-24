@@ -25,7 +25,7 @@
 
 Press **出發** (Go) and it downloads the game, Java, Fabric, Mistinn: Exile and a full set of performance mods, and tunes the settings to your computer.
 
-![The launcher: on the left the misty shore with its dark lighthouse and an anchor in the sea; on the right the game version, the three ways to play, the accounts and the Go button](images/launcher.png)
+![The launcher: on the left the Mist Inn at night in the fog, its windows lit, a hunter walking up the path to its door and Rust Anchor's chain hanging in the distance; on the right the game version, the three ways to play, the accounts and the Go button](images/launcher.png)
 
 The launcher's own interface is in Traditional Chinese.
 
