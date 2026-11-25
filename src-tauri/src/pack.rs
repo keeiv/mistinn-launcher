@@ -41,6 +41,9 @@ const CORE: &[&str] = &[
 ];
 /// For ordinary play on other versions: maps and quality-of-life the Mistinn mod replaces.
 const PLAIN_EXTRAS: &[&str] = &["xaeros-minimap", "xaeros-world-map", "jade", "mouse-tweaks"];
+/// The relay that opens a 霧宿 room to friends anywhere (e4mc, MIT): the room's invite carries the
+/// address it hands out, so nobody has to forward a port.
+const RELAY_MOD: &str = "e4mc";
 /// The mod that runs shader packs.
 const SHADER_MOD: &str = "iris";
 /// The shader pack used on the strongest graphics cards.
@@ -78,7 +81,9 @@ struct Choice {
 /// The Modrinth projects an instance wants, by slug, for this way to play.
 pub fn wanted(mistinn: bool, settings: &Settings) -> Vec<&'static str> {
     let mut list: Vec<&'static str> = CORE.to_vec();
-    if !mistinn {
+    if mistinn {
+        list.push(RELAY_MOD);
+    } else {
         list.extend_from_slice(PLAIN_EXTRAS);
     }
     if settings.shaders {

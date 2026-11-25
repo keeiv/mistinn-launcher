@@ -1,6 +1,6 @@
 [package]
 name = "mistinn-launcher"
-version = "0.1.1"
+version = "0.1.2"
 description = "霧宿啟動器 (Mistinn Launcher)"
 authors = ["森之宿茶室 MoriTeahouse"]
 edition = "2021"

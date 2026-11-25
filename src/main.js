@@ -249,20 +249,48 @@ function showError(message) {
 }
 
 // Starts the game with the chosen version, way to play and account, showing progress until it
-// closes.
-async function play() {
+// closes. With an invite it starts 霧宿 and goes straight into the friend's room.
+async function play(invite) {
   showError("");
   $("play").disabled = true;
+  $("join-go").disabled = true;
   $("progress").hidden = false;
   $("progress-text").textContent = "準備中…";
   try {
-    await invoke("play", { version: $("version").value, preset, account });
+    const version = invite ? state.mistinn_version : $("version").value;
+    await invoke("play", { version, preset, account, invite: invite || null });
     $("progress-text").textContent = "遊戲已關閉。";
   } catch (e) {
     showError(String(e));
     $("progress").hidden = true;
   } finally {
     $("play").disabled = false;
+    checkInvite();
+  }
+}
+
+// Reads the pasted invite: whose room it is, and whether this launcher's 霧宿 matches it.
+async function checkInvite() {
+  const code = $("invite").value.trim();
+  const note = $("invite-note");
+  $("join-go").disabled = true;
+  note.classList.remove("warn");
+  if (!code) {
+    note.textContent = "房主在遊戲裡按 Esc → 世界與連機 → 開放房間，會拿到一串邀請碼。";
+    return;
+  }
+  try {
+    const found = await invoke("check_invite", { code });
+    if (found.version !== found.ours) {
+      note.textContent = `房主用的是霧宿 ${found.version}，這個啟動器內建的是 ${found.ours}。兩邊要同一個版本才能一起玩。`;
+      note.classList.add("warn");
+      return;
+    }
+    note.textContent = found.relay ? `房主的房間（經由中繼）：${found.address}` : `房主的位址：${found.address}`;
+    $("join-go").disabled = !accounts.length;
+  } catch (e) {
+    note.textContent = String(e);
+    note.classList.add("warn");
   }
 }
 
@@ -326,7 +354,9 @@ async function main() {
   select.addEventListener("change", onVersionChange);
   onVersionChange();
 
-  $("play").addEventListener("click", play);
+  $("play").addEventListener("click", () => play());
+  $("invite").addEventListener("input", checkInvite);
+  $("join-go").addEventListener("click", () => play($("invite").value.trim()));
   $("ms-login").addEventListener("click", microsoftLogin);
   $("open-folder").addEventListener("click", () => invoke("open_instance", { version: $("version").value }));
   $("skin-pick").addEventListener("click", () => $("skin-file").click());
@@ -415,6 +445,12 @@ function mockInvoke(command) {
     mock[arguments[1].index].skin = "data:image/png;base64," + btoa(String.fromCharCode(...bytes));
     mock[arguments[1].index].slim_arms = arguments[1].slimArms;
     return Promise.resolve(mock);
+  }
+  if (command === "check_invite") {
+    const code = arguments[1].code.toUpperCase();
+    if (!code.startsWith("MIST")) return Promise.reject("這不是完整的邀請碼，請跟房主再複製一次。");
+    const old = code.includes("OLD");
+    return Promise.resolve({ address: "quiet-otter.jp.e4mc.link:25565", relay: true, version: old ? "0.1.0" : "0.1.1", ours: "0.1.1" });
   }
   if (command === "clear_skin") {
     mock[arguments[1].index].skin = null;

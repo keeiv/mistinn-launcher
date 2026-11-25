@@ -64,7 +64,7 @@ Chosen after the popular Fabric performance packs (Fabulously Optimized and othe
 - **Always**: Fabric API, Sodium, Sodium Extra, Reese's Sodium Options, Lithium, FerriteCore, ImmediatelyFast, EntityCulling, Dynamic FPS, More Culling, AppleSkin, Mod Menu.
 - **Ultra (strong cards)**: Iris and the Complementary Reimagined shader pack.
 - **Other versions (plain play)**: Xaero's Minimap, Xaero's World Map, Jade and Mouse Tweaks as well.
-- **Mistinn: Exile (26.3)**: no extra minimap or inventory mods, since the mod has its own minimap and grid inventory.
+- **Mistinn: Exile (26.3)**: no extra minimap or inventory mods, since the mod has its own minimap and grid inventory; and [e4mc](https://modrinth.com/mod/e4mc) (MIT licence), so playing with friends needs no router setup.
 
 A mod with no file for the chosen version is skipped and noted in the game log. The launcher only manages the mods it put there; files you put in `mods` yourself are never removed.
 
@@ -77,6 +77,14 @@ The version menu lists every full release. For anything other than 26.3 the laun
 At start the launcher asks GitHub for its latest release and compares it with the release and source commit it was built from. When a newer one is out, a small gold mark, **有新版本** (new version), appears by the version in the footer; it interrupts nothing. Clicking it opens the update window, which shows the current and the latest release and commit. **立即更新** (update now) downloads the new build, checks it against the SHA-256 GitHub records, replaces the running launcher and starts it again. Where the launcher's folder cannot be written (an install for every user), the new installer is started instead. No update runs while a game is starting.
 
 Only builds downloaded from Releases look for updates; a build of your own never does. 0.1.0 does not have this yet: download 0.1.1 or later by hand once.
+
+## Joining a friend
+
+The host presses Esc in game and chooses **World & Multiplayer → Open Room** to get an invite code starting with `MIST-`. Friends paste it into **加入好友** (join a friend) on the main page and press **加入** (join): the launcher starts Mistinn: Exile and goes straight into the host's room, offline accounts included.
+
+- The room is opened to the internet through e4mc's public relay, so neither side forwards a port. The relay is run by e4mc's author, and the game's connection passes through it.
+- The invite records the mod version the host runs. When the one built into this launcher differs, it says so first; both sides need the latest version.
+- An offline account's skin is handed to the mod, which shows it to everyone in the room (other versions still apply it as a resource pack).
 
 ## Accounts
 

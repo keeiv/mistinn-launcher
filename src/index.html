@@ -62,6 +62,14 @@
 
       <section class="block go">
         <button id="play" class="btn play">出發</button>
+        <details id="join" class="join">
+          <summary>加入好友</summary>
+          <div class="row">
+            <input id="invite" placeholder="貼上邀請碼（MIST-…）" aria-label="邀請碼" spellcheck="false" autocomplete="off" />
+            <button id="join-go" class="btn small" type="button" disabled>加入</button>
+          </div>
+          <p id="invite-note" class="note">房主在遊戲裡按 Esc → 世界與連機 → 開放房間，會拿到一串邀請碼。</p>
+        </details>
         <div id="progress" class="progress" hidden>
           <div class="bar"><div id="bar-fill" class="fill"></div></div>
           <p id="progress-text" class="note"></p>
