@@ -8,6 +8,7 @@ mod auth;
 mod bundled;
 mod fabric;
 mod hardware;
+mod invite;
 mod java;
 mod launch;
 mod mojang;
@@ -188,9 +189,52 @@ fn bundled_mods() -> Result<Vec<PathBuf>, String> {
     Ok(vec![jar])
 }
 
-/// Prepares and starts the game; only one launch at a time.
+/// The 霧宿 mod version built into this launcher.
+const MOD_VERSION: &str = env!("MISTINN_MOD_VERSION");
+
+/// What the window shows about a pasted invite.
+#[derive(Serialize)]
+struct InviteView {
+    address: String,
+    relay: bool,
+    version: String,
+    ours: String,
+}
+
+/// Reads an invite for the window: where the room is and whether this launcher's mod matches.
 #[tauri::command]
-async fn play(app: tauri::AppHandle, version: String, preset: Preset, account: usize) -> Result<(), String> {
+fn check_invite(code: String) -> Result<InviteView, String> {
+    let invite = invite::parse(&code).ok_or("這不是完整的邀請碼，請跟房主再複製一次。")?;
+    Ok(InviteView {
+        address: invite.address(),
+        relay: invite.relay(),
+        version: invite.version.clone(),
+        ours: MOD_VERSION.to_string(),
+    })
+}
+
+/// Prepares and starts the game; only one launch at a time. With an invite, the 霧宿 version
+/// starts and goes straight into the friend's room.
+#[tauri::command]
+async fn play(app: tauri::AppHandle, version: String, preset: Preset, account: usize, invite: Option<String>) -> Result<(), String> {
+    let invite = match invite.as_deref() {
+        Some(code) => {
+            let found = invite::parse(code).ok_or("這不是完整的邀請碼，請跟房主再複製一次。")?;
+            if found.version != MOD_VERSION {
+                return Err(format!(
+                    "房主用的是霧宿 {}，這個啟動器內建的是 {MOD_VERSION}。兩邊要同一個版本才能一起玩。",
+                    found.version
+                ));
+            }
+            Some(found)
+        }
+        None => None,
+    };
+    let version = if invite.is_some() {
+        launch::MISTINN_VERSION.to_string()
+    } else {
+        version
+    };
     let state = app.state::<AppState>();
     {
         let mut busy = state.launching.lock().unwrap();
@@ -220,6 +264,7 @@ async fn play(app: tauri::AppHandle, version: String, preset: Preset, account: u
             preset,
             account: chosen,
             bundled: bundled_mods()?,
+            invite,
         };
         let progress_app = app.clone();
         let log_app = app.clone();
@@ -279,9 +324,9 @@ fn selftest_update() -> anyhow::Result<()> {
     })
 }
 
-/// `--selftest <version> <smooth|normal|ultra> <offline name> [mistinn jar|-] [skin png]`: install
-/// and start without the window, printing progress, for automated checks. A skin given here is
-/// used as both its wide and slim version.
+/// `--selftest <version> <smooth|normal|ultra> <offline name> [mistinn jar|-] [skin png|-] [invite]`:
+/// install and start without the window, printing progress, for automated checks. A skin given
+/// here is used as both its wide and slim version; an invite joins that friend's room on start.
 fn selftest(args: &[String]) -> anyhow::Result<()> {
     let version = args.get(2).cloned().unwrap_or_else(|| launch::MISTINN_VERSION.to_string());
     let preset: Preset = serde_json::from_value(serde_json::json!(args.get(3).cloned().unwrap_or_else(|| "normal".into())))?;
@@ -291,7 +336,7 @@ fn selftest(args: &[String]) -> anyhow::Result<()> {
         Some(jar) => vec![PathBuf::from(jar)],
         None => vec![bundled::extract(&paths::root().join("bundled"))?],
     };
-    if let (Some(png), Account::Offline { uuid, .. }) = (args.get(6), &account) {
+    if let (Some(png), Account::Offline { uuid, .. }) = (args.get(6).filter(|a| a.as_str() != "-"), &account) {
         let bytes = std::fs::read(png)?;
         skin::save(
             uuid,
@@ -312,6 +357,7 @@ fn selftest(args: &[String]) -> anyhow::Result<()> {
             preset,
             account,
             bundled,
+            invite: args.get(7).and_then(|code| invite::parse(code)),
         },
         &hw,
         |p| {
@@ -454,6 +500,7 @@ fn main() {
             microsoft_start,
             microsoft_finish,
             play,
+            check_invite,
             open_instance,
             update_check,
             update_info,

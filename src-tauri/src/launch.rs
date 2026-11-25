@@ -32,6 +32,8 @@ pub struct Request {
     pub account: Account,
     /// The 霧宿 mod jars shipped with the launcher.
     pub bundled: Vec<PathBuf>,
+    /// A friend's room to join on start (霧宿 only).
+    pub invite: Option<crate::invite::Invite>,
 }
 
 /// The folder a version plays in: the 霧宿 version has its own, every other version one apiece.
@@ -116,8 +118,16 @@ pub async fn run(
     let options = game_dir.join("options.txt");
     let first_time = !options.exists();
     presets::write_options(&options, &settings, first_time)?;
-    // an offline account's own skin, as a resource pack in place of the default skins
-    if crate::skin::apply(&game_dir, &request.account)? {
+    // an offline account's own skin: handed to the 霧宿 mod, which shows it to everyone in the
+    // world; on other versions a resource pack in place of the default skins
+    let mut skin_args: Vec<String> = vec![];
+    if mistinn {
+        if let Some((file, slim)) = crate::skin::for_mod(&game_dir, &request.account)? {
+            skin_args.push(format!("-Dmistinn.skin={}", file.display()));
+            skin_args.push(format!("-Dmistinn.skin.slim={slim}"));
+            log("[launcher] offline skin handed to the mod".to_string());
+        }
+    } else if crate::skin::apply(&game_dir, &request.account)? {
         log("[launcher] offline skin pack on".to_string());
     }
 
@@ -193,6 +203,11 @@ pub async fn run(
     if let Some((_, argument)) = &logging {
         jvm.push(argument.clone());
     }
+    jvm.extend(skin_args);
+    let invite = request.invite.as_ref().filter(|_| mistinn);
+    if let Some(invite) = invite {
+        jvm.push(format!("-Dmistinn.invite={}", invite.code));
+    }
     let mut game: Vec<String> = vec![];
     if version.pointer("/arguments").is_some() {
         jvm.extend(arguments(&version, "jvm").iter().map(|a| substitute(a)));
@@ -211,6 +226,12 @@ pub async fn run(
         jvm.extend(profile.jvm_args.iter().map(|a| substitute(a)));
         game.extend(profile.game_args.iter().map(|a| substitute(a)));
         main_class = profile.main_class.clone();
+    }
+    if let Some(invite) = invite {
+        // straight into the friend's room once the game has loaded
+        game.push("--quickPlayMultiplayer".into());
+        game.push(invite.address());
+        log(format!("[launcher] joining {}", invite.address()));
     }
 
     stage("start")(1, 1);

@@ -132,6 +132,26 @@ pub fn apply(game_dir: &Path, account: &Account) -> Result<bool> {
     Ok(on)
 }
 
+/// Before a 霧宿 launch: the mod shows the skin itself and sends it to the other players in the
+/// world, so the pack (which would put this skin on every player with a default one) is taken
+/// away. Returns the image drawn for the player's arms and whether they are slim, for
+/// `-Dmistinn.skin` and `-Dmistinn.skin.slim`.
+pub fn for_mod(game_dir: &Path, account: &Account) -> Result<Option<(PathBuf, bool)>> {
+    let pack = game_dir.join("resourcepacks").join(PACK);
+    if pack.exists() {
+        std::fs::remove_dir_all(&pack)?;
+    }
+    enable(&game_dir.join("options.txt"), false)?;
+    let Account::Offline { uuid, .. } = account else {
+        return Ok(None);
+    };
+    let Some(skin) = load(uuid) else {
+        return Ok(None);
+    };
+    let (wide, slim, _) = files(uuid);
+    Ok(Some(if skin.slim_arms { (slim, true) } else { (wide, false) }))
+}
+
 /// Adds the pack to (or takes it out of) the resource packs options.txt lists, keeping the rest.
 /// It is never put on the incompatible list: the game takes a compatible pack off that list
 /// and then leaves it unselected for that start (Options.loadSelectedResourcePacks), so a pack
